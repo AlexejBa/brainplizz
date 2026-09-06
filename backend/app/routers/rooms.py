@@ -32,11 +32,12 @@ def create_room(
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    repository = GameRoomRepository(db)
+    room_repository = GameRoomRepository(db)
+    participant_repository = GameParticipantRepository(db)
 
     code = generate_room_code()
 
-    while repository.get_by_code(code):
+    while room_repository.get_by_code(code):
         code = generate_room_code()
 
     room = GameRoom(
@@ -45,7 +46,14 @@ def create_room(
         max_players=data.max_players
     )
 
-    created_room = repository.create(room)
+    created_room = room_repository.create(room)
+
+    host_participant = GameParticipant(
+        room_id=created_room.id,
+        user_id=user_id
+    )
+
+    participant_repository.create(host_participant)
 
     return created_room
 
@@ -126,6 +134,7 @@ def join_room(
 
     return created_participant
 
+
 @router.get(
     "/{room_id}/participants",
     response_model=list[GameParticipantResponse]
@@ -160,6 +169,7 @@ def get_room_participants(
     participants = participant_repository.get_by_room(room_id)
 
     return participants
+
 
 @router.post(
     "/{room_id}/ready",
@@ -204,14 +214,14 @@ def set_ready(
 
     participants = participant_repository.get_by_room(room_id)
 
-    all_ready = all(
-        participant.is_ready
-        for participant in participants
-    )
+    if len(participants) >= 2:
+        all_ready = all(
+            participant.is_ready
+            for participant in participants
+        )
 
-    if all_ready:
-        room.status = "playing"
-        room_repository.update(room)
+        if all_ready:
+            room.status = "playing"
+            room_repository.update(room)
 
     return updated_participant
-
