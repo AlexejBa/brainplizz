@@ -5,19 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user_id, get_db
 from app.models.game_answer import GameAnswer
+from app.game_state import connection_manager, game_manager
 
 from app.repositories.game_answer_repository import GameAnswerRepository
-from app.repositories.game_participant_repository import GameParticipantRepository
+from app.repositories.game_participant_repository import (
+    GameParticipantRepository
+)
 from app.repositories.question_repository import QuestionRepository
+from app.repositories.game_room_repository import GameRoomRepository
+
 from app.schemas.game_answer import (
     GameAnswerResponse,
     GameStatisticsResponse,
     GameResultResponse,
     SubmitAnswerRequest
 )
-from app.models.game_room import GameRoom
-from app.repositories.game_room_repository import GameRoomRepository
 from app.schemas.question import GameQuestionResponse
+
 
 router = APIRouter(
     prefix="/game",
@@ -30,7 +34,7 @@ router = APIRouter(
     response_model=GameAnswerResponse,
     status_code=201
 )
-def submit_answer(
+async def submit_answer(
     data: SubmitAnswerRequest,
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
@@ -54,6 +58,40 @@ def submit_answer(
         raise HTTPException(
             status_code=403,
             detail="Вы не можете отвечать от имени другого участника"
+        )
+
+    room = room_repository.get_by_id(
+        participant.room_id
+    )
+
+    if not room:
+        raise HTTPException(
+            status_code=404,
+            detail="Игровая комната не найдена"
+        )
+
+    if room.status != "playing":
+        raise HTTPException(
+            status_code=400,
+            detail="Игра не находится в активном состоянии"
+        )
+
+    game = game_manager.get_game(
+        participant.room_id
+    )
+
+    if not game:
+        raise HTTPException(
+            status_code=400,
+            detail="Состояние игры не найдено"
+        )
+
+    current_question_id = game.current_question_id
+
+    if current_question_id != data.question_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Этот вопрос сейчас не является активным"
         )
 
     question = question_repository.get_by_id(
@@ -99,27 +137,89 @@ def submit_answer(
 
     participant_repository.update(participant)
 
-    room = room_repository.get_by_id(
-        participant.room_id
+    game_manager.mark_answered(
+        room_id=participant.room_id,
+        user_id=user_id
     )
 
     participants = participant_repository.get_by_room(
         participant.room_id
     )
 
-    questions = question_repository.get_all()
+    player_ids = [
+        participant.user_id
+        for participant in participants
+    ]
 
-    answers = answer_repository.get_by_room(
-        participant.room_id
+    await connection_manager.broadcast(
+        room_id=participant.room_id,
+        message={
+            "type": "player_answered",
+            "user_id": str(user_id),
+            "question_id": str(data.question_id),
+            "is_correct": is_correct,
+            "score": score
+        }
     )
 
-    required_answers = len(participants) * len(questions)
+    all_answered = game_manager.all_players_answered(
+        room_id=participant.room_id,
+        player_ids=player_ids
+    )
 
-    if len(answers) >= required_answers:
-        room.status = "finished"
-        room_repository.update(room)
+    if all_answered:
+        if game_manager.is_last_question(
+            participant.room_id
+        ):
+            room.status = "finished"
+            room_repository.update(room)
+
+            game_manager.cancel_question_timer(
+                participant.room_id
+            )
+
+            await connection_manager.broadcast(
+                room_id=participant.room_id,
+                message={
+                    "type": "game_finished",
+                    "room_id": str(participant.room_id)
+                }
+            )
+
+            game_manager.remove_game(
+                participant.room_id
+            )
+
+        else:
+            next_question_id = game_manager.next_question(
+                participant.room_id
+            )
+
+            if next_question_id:
+                game_manager.start_question_timer(
+                    room_id=participant.room_id,
+                    seconds=30
+                )
+
+                next_index = (
+                    game.current_question_index + 1
+                )
+
+                await connection_manager.broadcast(
+                    room_id=participant.room_id,
+                    message={
+                        "type": "next_question",
+                        "room_id": str(participant.room_id),
+                        "question_id": str(next_question_id),
+                        "question_number": next_index + 1,
+                        "total_questions": len(
+                            game.question_ids
+                        )
+                    }
+                )
 
     return created_answer
+
 
 @router.get(
     "/rooms/{room_id}/question",
@@ -133,7 +233,6 @@ def get_current_question(
     room_repository = GameRoomRepository(db)
     participant_repository = GameParticipantRepository(db)
     question_repository = QuestionRepository(db)
-    answer_repository = GameAnswerRepository(db)
 
     room = room_repository.get_by_id(room_id)
 
@@ -160,31 +259,34 @@ def get_current_question(
             detail="Вы не являетесь участником этой комнаты"
         )
 
-    questions = question_repository.get_all()
+    game = game_manager.get_game(room_id)
 
-    if not questions:
+    if not game:
         raise HTTPException(
-            status_code=404,
-            detail="Вопросы для игры не найдены"
+            status_code=400,
+            detail="Состояние игры не найдено"
         )
 
-    answers = answer_repository.get_by_participant(
-        participant.id
+    current_question_id = game.current_question_id
+
+    if not current_question_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Текущий вопрос не найден"
+        )
+
+    question = question_repository.get_by_id(
+        current_question_id
     )
 
-    answered_question_ids = {
-        answer.question_id
-        for answer in answers
-    }
+    if not question:
+        raise HTTPException(
+            status_code=404,
+            detail="Вопрос не найден"
+        )
 
-    for question in questions:
-        if question.id not in answered_question_ids:
-            return question
+    return question
 
-    raise HTTPException(
-        status_code=404,
-        detail="Все вопросы уже пройдены"
-    )
 
 @router.get(
     "/participants/{participant_id}/statistics",
@@ -229,6 +331,7 @@ def get_game_statistics(
         correct_count=correct_count
     )
 
+
 @router.post(
     "/rooms/{room_id}/finish",
     response_model=GameResultResponse
@@ -257,9 +360,11 @@ def finish_game(
             detail="Игра не находится в активном состоянии"
         )
 
-    current_participant = participant_repository.get_by_user_and_room(
-        user_id=user_id,
-        room_id=room_id
+    current_participant = (
+        participant_repository.get_by_user_and_room(
+            user_id=user_id,
+            room_id=room_id
+        )
     )
 
     if not current_participant:
@@ -289,13 +394,17 @@ def finish_game(
     room.status = "finished"
     room_repository.update(room)
 
-    participants = participant_repository.get_by_room(room_id)
+    participants = participant_repository.get_by_room(
+        room_id
+    )
 
     result_participants = []
 
     for participant in participants:
-        participant_answers = answer_repository.get_by_participant(
-            participant.id
+        participant_answers = (
+            answer_repository.get_by_participant(
+                participant.id
+            )
         )
 
         answered_count = len(participant_answers)

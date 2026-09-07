@@ -8,12 +8,14 @@ from app.models.game_room import GameRoom
 from app.models.game_participant import GameParticipant
 from app.repositories.game_room_repository import GameRoomRepository
 from app.repositories.game_participant_repository import GameParticipantRepository
+from app.repositories.question_repository import QuestionRepository
 from app.schemas.game_room import CreateRoomRequest, GameRoomResponse
 from app.schemas.game_participant import (
     JoinRoomRequest,
     GameParticipantResponse
 )
 from app.utils.room_code import generate_room_code
+from app.game_state import connection_manager, game_manager
 
 
 router = APIRouter(
@@ -106,9 +108,11 @@ def join_room(
             detail="В эту комнату нельзя присоединиться"
         )
 
-    existing_participant = participant_repository.get_by_user_and_room(
-        user_id=user_id,
-        room_id=room.id
+    existing_participant = (
+        participant_repository.get_by_user_and_room(
+            user_id=user_id,
+            room_id=room.id
+        )
     )
 
     if existing_participant:
@@ -130,7 +134,9 @@ def join_room(
         user_id=user_id
     )
 
-    created_participant = participant_repository.create(participant)
+    created_participant = participant_repository.create(
+        participant
+    )
 
     return created_participant
 
@@ -155,9 +161,11 @@ def get_room_participants(
             detail="Игровая комната не найдена"
         )
 
-    current_participant = participant_repository.get_by_user_and_room(
-        user_id=user_id,
-        room_id=room_id
+    current_participant = (
+        participant_repository.get_by_user_and_room(
+            user_id=user_id,
+            room_id=room_id
+        )
     )
 
     if not current_participant:
@@ -166,7 +174,9 @@ def get_room_participants(
             detail="Вы не являетесь участником этой комнаты"
         )
 
-    participants = participant_repository.get_by_room(room_id)
+    participants = participant_repository.get_by_room(
+        room_id
+    )
 
     return participants
 
@@ -175,13 +185,14 @@ def get_room_participants(
     "/{room_id}/ready",
     response_model=GameParticipantResponse
 )
-def set_ready(
+async def set_ready(
     room_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     room_repository = GameRoomRepository(db)
     participant_repository = GameParticipantRepository(db)
+    question_repository = QuestionRepository(db)
 
     room = room_repository.get_by_id(room_id)
 
@@ -197,9 +208,11 @@ def set_ready(
             detail="Комната уже запущена"
         )
 
-    participant = participant_repository.get_by_user_and_room(
-        user_id=user_id,
-        room_id=room_id
+    participant = (
+        participant_repository.get_by_user_and_room(
+            user_id=user_id,
+            room_id=room_id
+        )
     )
 
     if not participant:
@@ -210,9 +223,13 @@ def set_ready(
 
     participant.is_ready = True
 
-    updated_participant = participant_repository.update(participant)
+    updated_participant = participant_repository.update(
+        participant
+    )
 
-    participants = participant_repository.get_by_room(room_id)
+    participants = participant_repository.get_by_room(
+        room_id
+    )
 
     if len(participants) >= 2:
         all_ready = all(
@@ -221,7 +238,50 @@ def set_ready(
         )
 
         if all_ready:
+            questions = question_repository.get_all()
+
+            if not questions:
+                raise HTTPException(
+                    status_code=400,
+                    detail="В игре нет вопросов"
+                )
+
             room.status = "playing"
+
             room_repository.update(room)
+
+            question_ids = [
+                question.id
+                for question in questions
+            ]
+
+            game = game_manager.create_game(
+                room_id=room_id,
+                question_ids=question_ids
+            )
+
+            current_question_id = (
+                game.current_question_id
+            )
+
+            await connection_manager.broadcast(
+                room_id=room_id,
+                message={
+                    "type": "game_started",
+                    "room_id": str(room_id),
+                    "question_id": (
+                        str(current_question_id)
+                        if current_question_id
+                        else None
+                    ),
+                    "question_number": 1,
+                    "total_questions": len(question_ids)
+                }
+            )
+
+            game_manager.start_question_timer(
+                room_id=room_id,
+                seconds=30
+            )
 
     return updated_participant
