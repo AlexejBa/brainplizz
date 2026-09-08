@@ -4,7 +4,7 @@ import json
 import websockets
 
 
-ROOM_ID = "fd15c276-881d-45c5-8ba8-319a242e137f"
+ROOM_ID = "ec46ce16-2be1-4c3e-ba2c-1192f10abf57"
 USER_ID = "a0005b70-4121-442b-aa60-0b1b825caf4e"
 
 
@@ -16,20 +16,12 @@ async def test_websocket():
 
     async with websockets.connect(uri) as websocket:
 
-        message = await websocket.recv()
+        print("WebSocket подключен")
 
-        print("Сервер:", message)
+        while True:
+            message = await websocket.recv()
 
-        await websocket.send(
-            json.dumps({
-                "type": "test",
-                "message": "Привет, BrainPlizz!"
-            })
-        )
-
-        response = await websocket.recv()
-
-        print("Сервер:", response)
+            print("Сервер:", message)
 
 
 asyncio.run(test_websocket())

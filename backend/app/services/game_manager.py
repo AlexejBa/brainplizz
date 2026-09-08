@@ -115,15 +115,22 @@ class GameManager:
         )
 
     def start_question_timer(
-        self,
-        room_id: UUID,
-        seconds: int
+            self,
+            room_id: UUID,
+            seconds: int
     ) -> None:
 
         game = self.get_game(room_id)
 
         if not game:
+            print(
+                f"GAME TIMER ERROR: game not found, room={room_id}"
+            )
             return
+
+        print(
+            f"GAME TIMER START: room={room_id}, seconds={seconds}"
+        )
 
         if game.question_task:
             game.question_task.cancel()
@@ -138,15 +145,64 @@ class GameManager:
         )
 
     async def _question_timer(
-        self,
-        room_id: UUID,
-        seconds: int
+            self,
+            room_id: UUID,
+            seconds: int
     ) -> None:
 
         try:
+            print(
+                f"GAME TIMER WAITING: room={room_id}, seconds={seconds}"
+            )
+
             await asyncio.sleep(seconds)
 
+            print(
+                f"GAME TIMER EXPIRED: room={room_id}"
+            )
+
         except asyncio.CancelledError:
+            print(
+                f"GAME TIMER CANCELLED: room={room_id}"
+            )
+            return
+
+        game = self.get_game(room_id)
+
+        if not game:
+            return
+
+        current_question_id = game.current_question_id
+
+        await self.connection_manager.broadcast(
+            room_id=room_id,
+            message={
+                "type": "question_timeout",
+                "question_id": (
+                    str(current_question_id)
+                    if current_question_id
+                    else None
+                )
+            }
+        )
+
+        if self.is_last_question(room_id):
+
+            await self.connection_manager.broadcast(
+                room_id=room_id,
+                message={
+                    "type": "game_finished",
+                    "room_id": str(room_id)
+                }
+            )
+
+            self.cancel_question_timer(room_id)
+
+            return
+
+        next_question_id = self.next_question(room_id)
+
+        if not next_question_id:
             return
 
         game = self.get_game(room_id)
@@ -157,8 +213,21 @@ class GameManager:
         await self.connection_manager.broadcast(
             room_id=room_id,
             message={
-                "type": "question_timeout"
+                "type": "next_question",
+                "room_id": str(room_id),
+                "question_id": str(next_question_id),
+                "question_number": (
+                    game.current_question_index + 1
+                ),
+                "total_questions": len(
+                    game.question_ids
+                )
             }
+        )
+
+        self.start_question_timer(
+            room_id=room_id,
+            seconds=30
         )
 
     def cancel_question_timer(

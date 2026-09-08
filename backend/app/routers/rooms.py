@@ -230,7 +230,16 @@ async def set_ready(
     participants = participant_repository.get_by_room(
         room_id
     )
-
+    print(
+        "READY DEBUG:",
+        [
+            {
+                "user_id": str(p.user_id),
+                "is_ready": p.is_ready
+            }
+            for p in participants
+        ]
+    )
     if len(participants) >= 2:
         all_ready = all(
             participant.is_ready
