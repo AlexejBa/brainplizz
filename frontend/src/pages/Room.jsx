@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   getRoom,
-  getRoomParticipants
+  getRoomParticipants,
+  setReady,
+  getQuestion
 } from "../services/api";
 
 function Room() {
@@ -10,6 +12,9 @@ function Room() {
 
   const [room, setRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [questionId, setQuestionId] = useState(null);
+  const [question, setQuestion] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,7 +56,18 @@ function Room() {
       setLoading(false);
     }
   }
+  async function handleReady() {
+  try {
+    await setReady(roomId);
 
+    await loadRoom();
+    await loadParticipants();
+  } catch (error) {
+    setError(
+      error.message || "Не удалось подтвердить готовность"
+    );
+  }
+}
   useEffect(() => {
     if (!roomId) {
       setError("ID комнаты отсутствует");
@@ -112,6 +128,15 @@ function Room() {
       ) {
         loadParticipants();
       }
+      if (message.type === "game_started") {
+        setGameStarted(true);
+        setQuestionId(message.question_id);
+      
+        console.log(
+          "Игра началась. Первый вопрос:",
+          message.question_id
+  );
+}
     };
 
     socket.onerror = (error) => {
@@ -207,7 +232,11 @@ function Room() {
           Ожидание игроков...
         </p>
       )}
-
+      {room.status === "waiting" && (
+        <button onClick={handleReady}>
+          Я готов
+        </button>
+)}
       {room.status === "playing" && (
         <p>
           Игра началась!

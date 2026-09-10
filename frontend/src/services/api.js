@@ -157,3 +157,41 @@ export async function getRoomParticipants(roomId) {
 
   return data;
 }
+export async function setReady(roomId) {
+  const token = localStorage.getItem("access_token");
+
+  const response = await fetch(
+    `${API_URL}/rooms/${roomId}/ready`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "Ошибка готовности"
+    );
+  }
+
+  return data;
+}
+export async function getQuestion(questionId) {
+  const response = await fetch(
+    `${API_URL}/questions/${questionId}`
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "Ошибка загрузки вопроса"
+    );
+  }
+
+  return data;
+}
