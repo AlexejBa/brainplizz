@@ -12,19 +12,23 @@ function Login() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    console.log("HANDLE SUBMIT ЗАПУСТИЛСЯ");
 
     setError("");
     setLoading(true);
 
     try {
       const data = await login(email, password);
-
+      console.log("LOGIN УСПЕШНО ЗАВЕРШИЛСЯ", data);
       localStorage.setItem(
         "access_token",
         data.access_token
       );
-      const user = await getMe();
 
+      console.log("ТОКЕН СОХРАНЕН");
+
+      const user = await getMe();
+      console.log("GET ME УСПЕШНО ЗАВЕРШИЛСЯ", user);
       localStorage.setItem(
         "user_id",
         user.id

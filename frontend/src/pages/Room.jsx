@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   getRoom,
   getRoomParticipants,
   setReady,
-  getQuestion
+  getQuestion,
+  submitAnswer
 } from "../services/api";
 
 function Room() {
@@ -15,6 +16,11 @@ function Room() {
   const [gameStarted, setGameStarted] = useState(false);
   const [questionId, setQuestionId] = useState(null);
   const [question, setQuestion] = useState(null);
+  const questionIdRef = useRef(null);
+  const [answerResult, setAnswerResult] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [currentParticipant, setCurrentParticipant] =
+  useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,6 +46,28 @@ function Room() {
     try {
       const data =
         await getRoomParticipants(roomId);
+      console.log("Участники комнаты:", data);
+      const userId =
+        localStorage.getItem("user_id");
+
+      const currentUserParticipant =
+        data.find(
+          (participant) =>
+            participant.user_id === userId
+        );
+
+      console.log(
+        "Мой участник:",
+        currentUserParticipant
+      );
+
+      setCurrentParticipant(
+        currentUserParticipant
+      );
+      console.log(
+        "Мой participant_id:",
+        currentUserParticipant?.id
+      );
 
       setParticipants(data);
     } catch (error) {
@@ -68,6 +96,35 @@ function Room() {
     );
   }
 }
+
+  async function handleAnswer(selectedAnswer) {
+  try {
+    const answeredQuestionId = question.id;
+    const result = await submitAnswer(
+      currentParticipant.id,
+      answeredQuestionId,
+      selectedAnswer
+    );
+
+    console.log("Результат ответа:", result);
+    
+    if (questionIdRef.current === answeredQuestionId) {
+      setAnswerResult(result);
+    }
+  } catch (error) {
+    console.error(
+      "Ошибка отправки ответа:",
+      error
+    );
+    console.log("ОШИБКА ОТВЕТА:", error);
+    console.log("ТИП ОШИБКИ:", typeof error);
+    setError(
+      error?.message ||
+      String(error) ||
+      "Не удалось отправить ответ"
+    );
+  }
+}
   useEffect(() => {
     if (!roomId) {
       setError("ID комнаты отсутствует");
@@ -78,6 +135,33 @@ function Room() {
     loadRoom();
     loadParticipants();
   }, [roomId]);
+
+  useEffect(() => {
+  if (!questionId) {
+    return;
+  }
+
+  async function loadQuestion() {
+    try {
+      const data = await getQuestion(questionId);
+
+      console.log("Получен вопрос:", data);
+
+      setQuestion(data);
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки вопроса:",
+        error
+      );
+
+      setError(
+        error.message || "Ошибка загрузки вопроса"
+      );
+    }
+  }
+
+  loadQuestion();
+}, [questionId]);
 
   useEffect(() => {
     if (!roomId) {
@@ -131,12 +215,24 @@ function Room() {
       if (message.type === "game_started") {
         setGameStarted(true);
         setQuestionId(message.question_id);
-      
+        questionIdRef.current = message.question_id;
+        setAnswerResult(null);
+
         console.log(
           "Игра началась. Первый вопрос:",
           message.question_id
-  );
-}
+        );
+      }
+      if (message.type === "next_question") {
+        setQuestionId(message.question_id);
+        questionIdRef.current = message.question_id;
+        setAnswerResult(null);
+
+      console.log(
+        "Следующий вопрос:",
+        message.question_id
+      );
+      }
     };
 
     socket.onerror = (error) => {
@@ -237,10 +333,37 @@ function Room() {
           Я готов
         </button>
 )}
-      {room.status === "playing" && (
-        <p>
-          Игра началась!
-        </p>
+      {gameStarted && question && (
+        <div>
+          <h2>Вопрос</h2>
+          <p>{question.text}</p>
+          <button onClick={() => handleAnswer(1)}
+            disabled={answerResult !== null}>
+            {question.answer_1}
+          </button>
+          <button onClick={() => handleAnswer(2)}
+            disabled={answerResult !== null}>
+            {question.answer_2}
+          </button>
+          <button onClick={() => handleAnswer(3)}
+            disabled={answerResult !== null}>
+            {question.answer_3}
+          </button>
+          <button onClick={() => handleAnswer(4)}
+            disabled={answerResult !== null}>
+            {question.answer_4}
+          </button>
+          {answerResult && (
+            <div>
+              {answerResult.is_correct ? (
+                <p>✅ Правильно!</p>
+              ) : (
+                <p>❌ Неправильно!</p>
+              )}
+              <p>Очки: {answerResult.score}</p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

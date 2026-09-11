@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +29,50 @@ router = APIRouter(
     tags=["Game"]
 )
 
+async def move_to_next_question(
+    room_id: UUID
+):
+    await asyncio.sleep(2)
+
+    game = game_manager.get_game(room_id)
+
+    if not game:
+        return
+
+    if game_manager.is_last_question(room_id):
+        return
+
+    next_question_id = game_manager.next_question(
+        room_id
+    )
+
+    if not next_question_id:
+        return
+
+    game = game_manager.get_game(room_id)
+
+    if not game:
+        return
+
+    game_manager.start_question_timer(
+        room_id=room_id,
+        seconds=30
+    )
+
+    next_index = game.current_question_index + 1
+
+    await connection_manager.broadcast(
+        room_id=room_id,
+        message={
+            "type": "next_question",
+            "room_id": str(room_id),
+            "question_id": str(next_question_id),
+            "question_number": next_index + 1,
+            "total_questions": len(
+                game.question_ids
+            )
+        }
+    )
 
 @router.post(
     "/answers",
@@ -191,32 +236,15 @@ async def submit_answer(
             )
 
         else:
-            next_question_id = game_manager.next_question(
+            game_manager.cancel_question_timer(
                 participant.room_id
             )
 
-            if next_question_id:
-                game_manager.start_question_timer(
-                    room_id=participant.room_id,
-                    seconds=30
+            asyncio.create_task(
+                move_to_next_question(
+                    participant.room_id
                 )
-
-                next_index = (
-                    game.current_question_index + 1
-                )
-
-                await connection_manager.broadcast(
-                    room_id=participant.room_id,
-                    message={
-                        "type": "next_question",
-                        "room_id": str(participant.room_id),
-                        "question_id": str(next_question_id),
-                        "question_number": next_index + 1,
-                        "total_questions": len(
-                            game.question_ids
-                        )
-                    }
-                )
+            )
 
     return created_answer
 
