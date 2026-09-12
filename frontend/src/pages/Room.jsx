@@ -19,6 +19,7 @@ function Room() {
   const questionIdRef = useRef(null);
   const [answerResult, setAnswerResult] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const timerRef = useRef(null);
   const [currentParticipant, setCurrentParticipant] =
   useState(null);
 
@@ -27,7 +28,29 @@ function Room() {
 
   const [wsStatus, setWsStatus] =
     useState("Подключение...");
+  
 
+  function startLocalTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
+    setTimeLeft(30);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((previousTime) => {
+        if (previousTime <= 1) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          return 0;
+        }
+
+        return previousTime - 1;
+      });
+    }, 1000);
+  }
+  
+ 
   async function loadRoom() {
     try {
       const data = await getRoom(roomId);
@@ -218,6 +241,8 @@ function Room() {
         questionIdRef.current = message.question_id;
         setAnswerResult(null);
 
+        startLocalTimer();
+
         console.log(
           "Игра началась. Первый вопрос:",
           message.question_id
@@ -227,11 +252,18 @@ function Room() {
         setQuestionId(message.question_id);
         questionIdRef.current = message.question_id;
         setAnswerResult(null);
+        
+        startLocalTimer();
 
-      console.log(
-        "Следующий вопрос:",
-        message.question_id
-      );
+        console.log(
+          "Следующий вопрос:",
+          message.question_id
+        );
+      }
+      if (message.type === "question_timeout") {
+        setTimeLeft(0);
+        setAnswerResult(null);
+        console.log("Время на вопрос истекло");
       }
     };
 
@@ -256,6 +288,11 @@ function Room() {
 
     return () => {
       socket.close();
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [roomId]);
 
@@ -336,21 +373,24 @@ function Room() {
       {gameStarted && question && (
         <div>
           <h2>Вопрос</h2>
+          {timeLeft !== null && (
+            <p>Осталось времени: {timeLeft} сек.</p>
+          )}
           <p>{question.text}</p>
           <button onClick={() => handleAnswer(1)}
-            disabled={answerResult !== null}>
+            disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_1}
           </button>
           <button onClick={() => handleAnswer(2)}
-            disabled={answerResult !== null}>
+            disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_2}
           </button>
           <button onClick={() => handleAnswer(3)}
-            disabled={answerResult !== null}>
+            disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_3}
           </button>
           <button onClick={() => handleAnswer(4)}
-            disabled={answerResult !== null}>
+            disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_4}
           </button>
           {answerResult && (
