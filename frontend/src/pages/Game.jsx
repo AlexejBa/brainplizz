@@ -26,6 +26,7 @@ function Game() {
         setUser(data);
       } catch (error) {
         localStorage.removeItem("access_token");
+        localStorage.removeItem("user_id");
         navigate("/login");
       } finally {
         setLoading(false);

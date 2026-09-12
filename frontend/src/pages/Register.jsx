@@ -19,11 +19,7 @@ function Register() {
     setLoading(true);
 
     try {
-      await register(
-        username,
-        email,
-        password
-      );
+      await register(username,email,password);
 
       navigate("/login");
 

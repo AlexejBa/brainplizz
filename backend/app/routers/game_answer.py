@@ -37,6 +37,91 @@ router = APIRouter(
     tags=["Game"]
 )
 
+def build_game_result(
+    room_id: UUID,
+    db: Session
+) -> GameResultResponse:
+    room_statement = select(GameRoom).where(
+        GameRoom.id == room_id
+    )
+
+    room = db.scalar(room_statement)
+
+    if room is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Игровая комната не найдена"
+        )
+
+    participants_statement = (
+        select(GameParticipant)
+        .where(
+            GameParticipant.room_id == room_id
+        )
+        .order_by(
+            GameParticipant.score.desc(),
+        )
+    )
+
+    participants = list(
+        db.scalars(participants_statement).all()
+    )
+
+    result_participants = []
+
+    for place, participant in enumerate(
+        participants,
+        start=1
+    ):
+        answered_count_statement = select(
+            func.count(GameAnswer.id)
+        ).where(
+            GameAnswer.participant_id == participant.id
+        )
+
+        answered_count = db.scalar(
+            answered_count_statement
+        ) or 0
+
+        correct_count_statement = select(
+            func.count(GameAnswer.id)
+        ).where(
+            GameAnswer.participant_id == participant.id,
+            GameAnswer.is_correct.is_(True)
+        )
+
+        correct_count = db.scalar(
+            correct_count_statement
+        ) or 0
+
+        result_participants.append(
+            GameResultParticipant(
+                participant_id=participant.id,
+                user_id=participant.user_id,
+                score=participant.score,
+                answered_count=answered_count,
+                correct_count=correct_count,
+                place=place
+            )
+        )
+
+    winner_id = None
+
+    if (
+        room.status == "finished"
+        and participants
+    ):
+        winner_id = participants[0].user_id
+
+    return GameResultResponse(
+        room_id=room.id,
+        status=room.status.value
+        if hasattr(room.status, "value")
+        else room.status,
+        winner_id=winner_id,
+        participants=result_participants
+    )
+
 async def move_to_next_question(
     room_id: UUID
 ):
@@ -75,7 +160,7 @@ async def move_to_next_question(
             "type": "next_question",
             "room_id": str(room_id),
             "question_id": str(next_question_id),
-            "question_number": next_index + 1,
+            "question_number": game.current_question_index + 1,
             "total_questions": len(
                 game.question_ids
             )
@@ -170,11 +255,17 @@ async def submit_answer(
             detail="Вы уже отвечали на этот вопрос"
         )
 
-    is_correct = (
-        data.selected_answer == question.correct_answer
+    is_correct = data.selected_answer == question.correct_answer
+
+    base_score = 100 if is_correct else 0
+
+    time_bonus = (
+        game_manager.get_time_bonus(participant.room_id)
+        if is_correct
+        else 0
     )
 
-    score = 100 if is_correct else 0
+    score = base_score + time_bonus
 
     answer = GameAnswer(
         participant_id=data.participant_id,
@@ -369,82 +460,13 @@ def get_game_statistics(
 
 @router.get(
     "/rooms/{room_id}/leaderboard",
-    response_model=GameResultResponse,
+    response_model=GameResultResponse
 )
 def get_room_leaderboard(
     room_id: UUID,
-    session: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
-    room_statement = select(GameRoom).where(
-        GameRoom.id == room_id
-    )
-
-    room = session.scalar(room_statement)
-
-    if room is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Room not found",
-        )
-
-    participants_statement = (
-        select(GameParticipant)
-        .where(GameParticipant.room_id == room_id)
-        .order_by(GameParticipant.score.desc(),
-            GameParticipant.joined_at.asc(),
-        )
-    )
-
-    participants = list(
-        session.scalars(participants_statement).all()
-    )
-
-    result_participants = []
-
-    for place, participant in enumerate(participants, start=1):
-        answered_count_statement = select(
-            func.count(GameAnswer.id)
-        ).where(
-            GameAnswer.participant_id == participant.id
-        )
-
-        answered_count = session.scalar(
-            answered_count_statement
-        ) or 0
-
-        correct_count_statement = select(
-            func.count(GameAnswer.id)
-        ).where(
-            GameAnswer.participant_id == participant.id,
-            GameAnswer.is_correct.is_(True),
-        )
-
-        correct_count = session.scalar(
-            correct_count_statement
-        ) or 0
-
-        result_participants.append(
-            GameResultParticipant(
-                participant_id=participant.id,
-                user_id=participant.user_id,
-                score=participant.score,
-                answered_count=answered_count,
-                correct_count=correct_count,
-                place=place,
-            )
-        )
-
-    winner_id = None
-
-    if room.status.value == "finished" and participants:
-        winner_id = participants[0].user_id
-
-    return GameResultResponse(
-        room_id=room.id,
-        status=room.status.value,
-        winner_id=winner_id,
-        participants=result_participants,
-    )
+    return build_game_result(room_id, db)
 
 @router.post(
     "/rooms/{room_id}/finish",

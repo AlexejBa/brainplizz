@@ -67,6 +67,37 @@ class GameManager:
 
         return self.games.get(room_id)
 
+    def get_time_bonus(
+        self,
+        room_id: UUID
+    ) -> int:
+
+        game = self.get_game(room_id)
+
+        if not game:
+            return 0
+
+        if not game.question_started_at:
+            return 0
+
+        elapsed_seconds = (
+            datetime.utcnow() - game.question_started_at
+        ).total_seconds()
+
+        if elapsed_seconds <= 5:
+            return 50
+
+        if elapsed_seconds <= 10:
+            return 30
+
+        if elapsed_seconds <= 20:
+            return 15
+
+        if elapsed_seconds <= 30:
+            return 5
+
+        return 0
+
     def remove_game(
         self,
         room_id: UUID
@@ -192,7 +223,8 @@ class GameManager:
                 room_id=room_id,
                 message={
                     "type": "game_finished",
-                    "room_id": str(room_id)
+                    "room_id": str(room_id),
+                    "reason" : "timeout"
                 }
             )
 
@@ -245,22 +277,19 @@ class GameManager:
 
             game.question_task = None
 
-    def next_question(
-        self,
-        room_id: UUID
-    ) -> UUID | None:
-
+    def next_question(self, room_id: UUID) -> UUID | None:
         game = self.get_game(room_id)
 
         if not game:
             return None
 
+        if self.is_last_question(room_id):
+            return None
+
         self.cancel_question_timer(room_id)
 
         game.current_question_index += 1
-
         game.answered_players.clear()
-
         game.question_started_at = None
 
         return game.current_question_id

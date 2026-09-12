@@ -16,7 +16,7 @@ function JoinRoom() {
     setLoading(true);
 
     try {
-      const participant = await joinRoom(code);
+      const participant = await joinRoom(code.trim());
 
       console.log("Участник добавлен:", participant);
 
@@ -43,6 +43,7 @@ function JoinRoom() {
             setCode(event.target.value.toUpperCase())
           }
           maxLength={6}
+          autoComplete="off"
           required
         />
 

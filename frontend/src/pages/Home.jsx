@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 function Home() {
   return (
     <main className="home-page">
@@ -9,8 +11,9 @@ function Home() {
       </p>
 
       <div className="home-actions">
-        <a href="/login">Войти в игру</a>
-        <a href="/register">Создать аккаунт</a>
+        <Link to="/login">Войти в игру</Link>
+
+        <Link to="/register">Создать аккаунт</Link>
       </div>
     </main>
   );

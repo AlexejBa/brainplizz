@@ -180,16 +180,24 @@ export async function setReady(roomId) {
 
   return data;
 }
-export async function getQuestion(questionId) {
+export async function getQuestion(roomId) {
+  const token = localStorage.getItem("access_token");
+
   const response = await fetch(
-    `${API_URL}/questions/${questionId}`
+    `${API_URL}/game/rooms/${roomId}/question`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
   );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      data.detail || "Ошибка загрузки вопроса"
+      data.detail || "Ошибка загрузки текущего вопроса"
     );
   }
 
@@ -200,29 +208,52 @@ export async function submitAnswer(
   questionId,
   selectedAnswer
 ) {
+  const token = localStorage.getItem("access_token");
+
   const response = await fetch(
     `${API_URL}/game/answers`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         participant_id: participantId,
         question_id: questionId,
-        selected_answer: selectedAnswer
-      })
+        selected_answer: selectedAnswer,
+      }),
     }
   );
 
   const data = await response.json();
 
   if (!response.ok) {
-    console.log("ОШИБКА API:", data);
-
     throw new Error(
-      JSON.stringify(data.detail)
+      data.detail || "Ошибка отправки ответа"
+    );
+  }
+
+  return data;
+}
+export async function getLeaderboard(roomId) {
+  const token = localStorage.getItem("access_token");
+
+  const response = await fetch(
+    `${API_URL}/game/rooms/${roomId}/leaderboard`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "Не удалось загрузить таблицу результатов"
     );
   }
 

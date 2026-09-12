@@ -5,7 +5,8 @@ import {
   getRoomParticipants,
   setReady,
   getQuestion,
-  submitAnswer
+  submitAnswer,
+  getLeaderboard
 } from "../services/api";
 
 function Room() {
@@ -15,6 +16,7 @@ function Room() {
   const [participants, setParticipants] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameFinished, setGameFinished] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [questionId, setQuestionId] = useState(null);
   const [question, setQuestion] = useState(null);
   const questionIdRef = useRef(null);
@@ -108,18 +110,46 @@ function Room() {
       setLoading(false);
     }
   }
-  async function handleReady() {
-  try {
-    await setReady(roomId);
+   
 
-    await loadRoom();
-    await loadParticipants();
-  } catch (error) {
-    setError(
-      error.message || "Не удалось подтвердить готовность"
-    );
+  async function loadLeaderboard() {
+    try {
+      const data = await getLeaderboard(roomId);
+
+      console.log(
+        "Итоговая таблица:",
+        data
+      );
+
+      setLeaderboard(
+        data.participants || []
+      );
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки итоговой таблицы:",
+        error
+      );
+
+      setError(
+        error.message ||
+        "Не удалось загрузить итоговую таблицу"
+      );
+    }
   }
-}
+
+  async function handleReady() {
+    try {
+      await setReady(roomId);
+
+      await loadRoom();
+      await loadParticipants();
+    } catch (error) {
+      setError(
+        error.message ||
+        "Не удалось подтвердить готовность"
+      );
+    }
+  }
 
   async function handleAnswer(selectedAnswer) {
   try {
@@ -167,7 +197,7 @@ function Room() {
 
   async function loadQuestion() {
     try {
-      const data = await getQuestion(questionId);
+      const data = await getQuestion(roomId);
 
       console.log("Получен вопрос:", data);
 
@@ -278,6 +308,7 @@ function Room() {
         }
 
         console.log("Игра завершена");
+        loadLeaderboard();
       }    
     };
 
@@ -387,7 +418,37 @@ function Room() {
       {gameFinished && (
         <div>
           <h2>Игра завершена!</h2>
+
           <p>Все вопросы закончились.</p>
+
+          <h3>Итоговая таблица</h3>
+
+          {leaderboard.length === 0 ? (
+            <p>Загрузка результатов...</p>
+          ) : (
+            <table border="1" cellPadding="8">
+              <thead>
+                <tr>
+                  <th>Место</th>
+                  <th>Игрок</th>
+                  <th>Правильные ответы</th>
+                  <th>Очки</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {leaderboard.map((participant) => (
+                  <tr key={participant.participant_id}>
+                    <td>{participant.place}</td>
+                    <td>{participant.user_id}</td>
+                    <td>{participant.correct_count}</td>
+                    <td>{participant.score}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
           <p>Спасибо за участие!</p>
         </div>
       )}
@@ -416,12 +477,8 @@ function Room() {
           </button>
           {answerResult && (
             <div>
-              {answerResult.is_correct ? (
-                <p>✅ Правильно!</p>
-              ) : (
-                <p>❌ Неправильно!</p>
-              )}
-              <p>Очки: {answerResult.score}</p>
+              <p>Ответ принят.</p>
+              <p>Ожидайте окончания вопроса.</p>
             </div>
           )}
         </div>
