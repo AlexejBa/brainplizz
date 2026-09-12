@@ -14,6 +14,7 @@ function Room() {
   const [room, setRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameFinished, setGameFinished] = useState(false);
   const [questionId, setQuestionId] = useState(null);
   const [question, setQuestion] = useState(null);
   const questionIdRef = useRef(null);
@@ -237,6 +238,7 @@ function Room() {
       }
       if (message.type === "game_started") {
         setGameStarted(true);
+        setGameFinished(false);
         setQuestionId(message.question_id);
         questionIdRef.current = message.question_id;
         setAnswerResult(null);
@@ -265,6 +267,18 @@ function Room() {
         setAnswerResult(null);
         console.log("Время на вопрос истекло");
       }
+      if (message.type === "game_finished") {
+        setGameFinished(true);
+        setTimeLeft(0);
+        setAnswerResult(null);
+
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
+        console.log("Игра завершена");
+      }    
     };
 
     socket.onerror = (error) => {
@@ -370,7 +384,14 @@ function Room() {
           Я готов
         </button>
 )}
-      {gameStarted && question && (
+      {gameFinished && (
+        <div>
+          <h2>Игра завершена!</h2>
+          <p>Все вопросы закончились.</p>
+          <p>Спасибо за участие!</p>
+        </div>
+      )}
+      {gameStarted && question && !gameFinished && (
         <div>
           <h2>Вопрос</h2>
           {timeLeft !== null && (
