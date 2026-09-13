@@ -31,6 +31,7 @@ class GameStatisticsResponse(BaseModel):
 class GameResultParticipant(BaseModel):
     participant_id: UUID
     user_id: UUID
+    username: str
     score: int
     answered_count: int
     correct_count: int

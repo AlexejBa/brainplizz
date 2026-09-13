@@ -11,7 +11,8 @@ from app.dependencies import get_current_user_id, get_db
 
 from app.models.game_answer import GameAnswer
 from app.models.game_participant import GameParticipant
-from app.models.game_room import GameRoom
+from app.models.game_room import GameRoom, GameRoomStatus
+from app.models.user import User
 
 from app.game_state import connection_manager, game_manager
 
@@ -54,25 +55,31 @@ def build_game_result(
         )
 
     participants_statement = (
-        select(GameParticipant)
+        select(GameParticipant, User.username)
+        .join(
+            User,
+            User.id == GameParticipant.user_id
+        )
         .where(
             GameParticipant.room_id == room_id
         )
         .order_by(
-            GameParticipant.score.desc(),
+            GameParticipant.score.desc()
         )
     )
 
-    participants = list(
-        db.scalars(participants_statement).all()
-    )
+    participant_rows = db.execute(
+        participants_statement
+    ).all()
 
     result_participants = []
 
-    for place, participant in enumerate(
-        participants,
+    for place, row in enumerate(
+        participant_rows,
         start=1
     ):
+        participant, username = row
+
         answered_count_statement = select(
             func.count(GameAnswer.id)
         ).where(
@@ -98,6 +105,7 @@ def build_game_result(
             GameResultParticipant(
                 participant_id=participant.id,
                 user_id=participant.user_id,
+                username=username,
                 score=participant.score,
                 answered_count=answered_count,
                 correct_count=correct_count,
@@ -105,19 +113,23 @@ def build_game_result(
             )
         )
 
+    room_status = (
+        room.status.value
+        if hasattr(room.status, "value")
+        else room.status
+    )
+
     winner_id = None
 
     if (
-        room.status == "finished"
-        and participants
+        room_status == GameRoomStatus.FINISHED.value
+        and participant_rows
     ):
-        winner_id = participants[0].user_id
+        winner_id = participant_rows[0][0].user_id
 
     return GameResultResponse(
         room_id=room.id,
-        status=room.status.value
-        if hasattr(room.status, "value")
-        else room.status,
+        status=room_status,
         winner_id=winner_id,
         participants=result_participants
     )

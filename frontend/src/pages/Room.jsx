@@ -426,23 +426,44 @@ function Room() {
           {leaderboard.length === 0 ? (
             <p>Загрузка результатов...</p>
           ) : (
-            <table border="1" cellPadding="8">
+            <table
+              border="1"
+              cellPadding="8"
+              style={{
+                borderCollapse: "collapse",
+                width: "100%",
+                textAlign: "center",
+              }}>
               <thead>
                 <tr>
-                  <th>Место</th>
-                  <th>Игрок</th>
-                  <th>Правильные ответы</th>
-                  <th>Очки</th>
+                  <th style={{ padding: "12px", minWidth: "80px" }}>
+                    Место
+                  </th>
+                  <th style={{ padding: "12px", minWidth: "160px" }}>
+                    Игрок
+                  </th>
+                  <th style={{ padding: "12px", minWidth: "100px" }}>
+                    Баллы
+                  </th>
                 </tr>
               </thead>
-
               <tbody>
                 {leaderboard.map((participant) => (
                   <tr key={participant.participant_id}>
-                    <td>{participant.place}</td>
-                    <td>{participant.user_id}</td>
-                    <td>{participant.correct_count}</td>
-                    <td>{participant.score}</td>
+                    <td style={{ padding: "12px" }}>
+                      {participant.place}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {participant.username ||
+                        participant.name ||
+                        participant.user_name ||
+                        participant.user_id}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {participant.score}
+                    </td>
                   </tr>
                 ))}
               </tbody>
