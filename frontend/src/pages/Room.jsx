@@ -4,6 +4,7 @@ import {
   getRoom,
   getRoomParticipants,
   setReady,
+  startGame,
   getQuestion,
   submitAnswer,
   getLeaderboard
@@ -11,7 +12,7 @@ import {
 
 function Room() {
   const { roomId } = useParams();
-
+  const currentUserId = localStorage.getItem("user_id");
   const [room, setRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
@@ -31,7 +32,7 @@ function Room() {
 
   const [wsStatus, setWsStatus] =
     useState("Подключение...");
-  
+  const isHost = room?.host_id === currentUserId;
 
   function startLocalTimer() {
     if (timerRef.current) {
@@ -147,6 +148,27 @@ function Room() {
       setError(
         error.message ||
         "Не удалось подтвердить готовность"
+      );
+    }
+  }
+
+  async function handleStartGame() {
+    try {
+      setError("");
+
+      await startGame(roomId);
+
+      await loadRoom();
+      await loadParticipants();
+    } catch (error) {
+      console.error(
+        "Ошибка запуска игры:",
+        error
+      );
+
+      setError(
+        error.message ||
+        "Не удалось начать игру"
       );
     }
   }
@@ -406,15 +428,22 @@ function Room() {
       </ul>
 
       {room.status === "waiting" && (
-        <p>
-          Ожидание игроков...
-        </p>
+        <div>
+          <p>
+            Ожидание игроков...
+          </p>
+
+          <button onClick={handleReady}>
+            Я готов
+          </button>
+
+          {isHost && (
+            <button onClick={handleStartGame}>
+              Начать игру
+            </button>
+          )}
+        </div>
       )}
-      {room.status === "waiting" && (
-        <button onClick={handleReady}>
-          Я готов
-        </button>
-)}
       {gameFinished && (
         <div>
           <h2>Игра завершена!</h2>

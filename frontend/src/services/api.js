@@ -180,6 +180,26 @@ export async function setReady(roomId) {
 
   return data;
 }
+
+export async function startGame(roomId) {
+  const token = localStorage.getItem("access_token");
+
+  const response = await fetch(`${API_URL}/rooms/${roomId}/start`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || "Не удалось начать игру");
+  }
+
+  return data;
+}
+
 export async function getQuestion(roomId) {
   const token = localStorage.getItem("access_token");
 

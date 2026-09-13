@@ -185,14 +185,13 @@ def get_room_participants(
     "/{room_id}/ready",
     response_model=GameParticipantResponse
 )
-async def set_ready(
+def set_ready(
     room_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     room_repository = GameRoomRepository(db)
     participant_repository = GameParticipantRepository(db)
-    question_repository = QuestionRepository(db)
 
     room = room_repository.get_by_id(room_id)
 
@@ -227,70 +226,103 @@ async def set_ready(
         participant
     )
 
-    participants = participant_repository.get_by_room(
-        room_id
-    )
-    print(
-        "READY DEBUG:",
-        [
-            {
-                "user_id": str(p.user_id),
-                "is_ready": p.is_ready
-            }
-            for p in participants
-        ]
-    )
-    if len(participants) >= 2:
-        all_ready = all(
-            participant.is_ready
-            for participant in participants
+    return updated_participant
+
+@router.post("/{room_id}/start")
+async def start_game(
+    room_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    room_repository = GameRoomRepository(db)
+    participant_repository = GameParticipantRepository(db)
+    question_repository = QuestionRepository(db)
+
+    room = room_repository.get_by_id(room_id)
+
+    if not room:
+        raise HTTPException(
+            status_code=404,
+            detail="Игровая комната не найдена"
         )
 
-        if all_ready:
-            questions = question_repository.get_all()
+    if room.host_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Только ведущий может начать игру"
+        )
 
-            if not questions:
-                raise HTTPException(
-                    status_code=400,
-                    detail="В игре нет вопросов"
-                )
+    if room.status != "waiting":
+        raise HTTPException(
+            status_code=400,
+            detail="Комната уже запущена или завершена"
+        )
 
-            room.status = "playing"
+    participants = participant_repository.get_by_room(room_id)
 
-            room_repository.update(room)
+    if len(participants) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Для начала игры нужно минимум два участника"
+        )
 
-            question_ids = [
-                question.id
-                for question in questions
-            ]
+    if not all(participant.is_ready for participant in participants):
+        raise HTTPException(
+            status_code=400,
+            detail="Не все участники готовы"
+        )
 
-            game = game_manager.create_game(
-                room_id=room_id,
-                question_ids=question_ids
-            )
+    questions = question_repository.get_all()
 
-            current_question_id = (
-                game.current_question_id
-            )
+    if not questions:
+        raise HTTPException(
+            status_code=400,
+            detail="В игре нет вопросов"
+        )
 
-            await connection_manager.broadcast(
-                room_id=room_id,
-                message={
-                    "type": "game_started",
-                    "room_id": str(room_id),
-                    "question_id": (
-                        str(current_question_id)
-                        if current_question_id
-                        else None
-                    ),
-                    "question_number": 1,
-                    "total_questions": len(question_ids)
-                }
-            )
+    room.status = "playing"
+    room_repository.update(room)
 
-            game_manager.start_question_timer(
-                room_id=room_id,
-                seconds=30
-            )
+    question_ids = [
+        question.id
+        for question in questions
+    ]
 
-    return updated_participant
+    game = game_manager.create_game(
+        room_id=room_id,
+        question_ids=question_ids
+    )
+
+    current_question_id = game.current_question_id
+
+    await connection_manager.broadcast(
+        room_id=room_id,
+        message={
+            "type": "game_started",
+            "room_id": str(room_id),
+            "question_id": (
+                str(current_question_id)
+                if current_question_id
+                else None
+            ),
+            "question_number": 1,
+            "total_questions": len(question_ids)
+        }
+    )
+
+    game_manager.start_question_timer(
+        room_id=room_id,
+        seconds=30
+    )
+
+    return {
+        "message": "Игра началась",
+        "room_id": str(room_id),
+        "question_id": (
+            str(current_question_id)
+            if current_question_id
+            else None
+        ),
+        "question_number": 1,
+        "total_questions": len(question_ids)
+    }
