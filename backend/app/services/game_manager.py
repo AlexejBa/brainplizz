@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
+from math import ceil
 from uuid import UUID
 
 from app.websocket_manager import ConnectionManager
@@ -97,6 +98,31 @@ class GameManager:
             return 5
 
         return 0
+
+    def get_remaining_time(
+        self,
+        room_id: UUID,
+        seconds: int = 30
+    ) -> int:
+
+        game = self.get_game(room_id)
+
+        if not game:
+            return 0
+
+        if not game.question_started_at:
+            return seconds
+
+        elapsed_seconds = (
+            datetime.utcnow() - game.question_started_at
+        ).total_seconds()
+
+        remaining_seconds = seconds - elapsed_seconds
+
+        return max(
+            0,
+            ceil(remaining_seconds)
+        )
 
     def remove_game(
         self,

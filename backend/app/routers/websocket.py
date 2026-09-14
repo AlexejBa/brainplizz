@@ -8,7 +8,10 @@ from app.repositories.game_participant_repository import (
     GameParticipantRepository
 )
 from app.repositories.game_room_repository import GameRoomRepository
-from app.game_state import connection_manager
+from app.game_state import (
+    connection_manager,
+    game_manager
+)
 
 
 router = APIRouter(
@@ -70,6 +73,28 @@ async def websocket_room(
                 "user_id": str(user_id)
             }
         )
+
+        if room.status == "playing":
+            current_question_id = game_manager.current_question(
+                room_id
+            )
+
+            if current_question_id:
+                remaining_seconds = game_manager.get_remaining_time(
+                    room_id=room_id,
+                    seconds=30
+                )
+
+                await connection_manager.send_to_user(
+                    room_id=room_id,
+                    user_id=user_id,
+                    message={
+                        "type": "current_question",
+                        "room_id": str(room_id),
+                        "question_id": str(current_question_id),
+                        "remaining_seconds": remaining_seconds
+                    }
+                )
 
         await connection_manager.broadcast(
             room_id=room_id,

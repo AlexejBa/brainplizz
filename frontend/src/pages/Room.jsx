@@ -34,12 +34,17 @@ function Room() {
     useState("Подключение...");
   const isHost = room?.host_id === currentUserId;
 
-  function startLocalTimer() {
+  function startLocalTimer(initialSeconds = 30) {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
 
-    setTimeLeft(30);
+    setTimeLeft(initialSeconds);
+
+    if (initialSeconds <= 0) {
+      timerRef.current = null;
+      return;
+    }
 
     timerRef.current = setInterval(() => {
       setTimeLeft((previousTime) => {
@@ -60,6 +65,21 @@ function Room() {
       const data = await getRoom(roomId);
 
       setRoom(data);
+
+      if (data.status === "finished") {
+        setGameStarted(false);
+        setGameFinished(true);
+        setQuestionId(null);
+        setQuestion(null);
+        setTimeLeft(0);
+
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
+        await loadLeaderboard();
+      }
     } catch (error) {
       console.error("Ошибка загрузки комнаты:", error);
 
@@ -326,6 +346,26 @@ function Room() {
         message.question_id
       );
     }
+
+  if (message.type === "current_question") {
+    setGameStarted(true);
+    setGameFinished(false);
+    setQuestionId(message.question_id);
+    questionIdRef.current = message.question_id;
+    setAnswerResult(null);
+
+    const remainingSeconds =
+      message.remaining_seconds ?? 30;
+
+    startLocalTimer(remainingSeconds);
+
+    console.log(
+      "Восстановлен текущий вопрос:",
+      message.question_id,
+      "Осталось секунд:",
+      remainingSeconds
+    );
+  } 
 
     if (message.type === "question_timeout") {
       setTimeLeft(0);

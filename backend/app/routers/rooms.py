@@ -102,12 +102,6 @@ def join_room(
             detail="Игровая комната не найдена"
         )
 
-    if room.status != "waiting":
-        raise HTTPException(
-            status_code=400,
-            detail="В эту комнату нельзя присоединиться"
-        )
-
     existing_participant = (
         participant_repository.get_by_user_and_room(
             user_id=user_id,
@@ -116,10 +110,16 @@ def join_room(
     )
 
     if existing_participant:
+        return existing_participant
+
+    if room.status != "waiting":
         raise HTTPException(
-            status_code=409,
-            detail="Вы уже находитесь в этой комнате"
+            status_code=400,
+            detail="В эту комнату нельзя присоединиться"
         )
+
+    if existing_participant:
+        return existing_participant
 
     participants = participant_repository.get_by_room(room.id)
 
