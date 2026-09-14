@@ -60,5 +60,19 @@ class ConnectionManager:
     ):
         connections = self.rooms.get(room_id, {})
 
-        for websocket in connections.values():
-            await websocket.send_json(message)
+        for user_id, websocket in list(connections.items()):
+            try:
+                await websocket.send_json(message)
+
+            except Exception as error:
+                print(
+                    "WEBSOCKET SEND ERROR:",
+                    f"room={room_id}",
+                    f"user={user_id}",
+                    f"error={error}"
+                )
+
+                self.disconnect(
+                    room_id=room_id,
+                    user_id=user_id
+                )
