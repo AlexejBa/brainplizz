@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.base import Base
@@ -10,6 +10,12 @@ from app.base import Base
 class GameAnswer(Base):
     __tablename__ = "game_answers"
 
+    __table_args__ = (UniqueConstraint(
+        "participant_id",
+        "question_id",
+        name="uq_game_answer_participant_question"),
+    )
+    
     id: Mapped[UUID] = mapped_column(
         primary_key=True,
         default=uuid4

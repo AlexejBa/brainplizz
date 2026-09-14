@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
+from typing import Awaitable, Callable
 from uuid import UUID
 
 from app.websocket_manager import ConnectionManager
@@ -37,9 +38,13 @@ class RoomGameState:
 class GameManager:
     def __init__(
         self,
-        connection_manager: ConnectionManager
+        connection_manager: ConnectionManager,
+        on_game_finished: (
+            Callable[[UUID], Awaitable[None]] | None
+        ) = None
     ):
         self.connection_manager = connection_manager
+        self.on_game_finished = on_game_finished
 
         self.games: dict[
             UUID,
@@ -134,7 +139,12 @@ class GameManager:
             None
         )
 
-        if game and game.question_task:
+        if not game or not game.question_task:
+            return
+
+        current_task = asyncio.current_task()
+
+        if game.question_task is not current_task:
             game.question_task.cancel()
 
     def mark_answered(
@@ -172,9 +182,9 @@ class GameManager:
         )
 
     def start_question_timer(
-            self,
-            room_id: UUID,
-            seconds: int
+        self,
+        room_id: UUID,
+        seconds: int
     ) -> None:
 
         game = self.get_game(room_id)
@@ -202,9 +212,9 @@ class GameManager:
         )
 
     async def _question_timer(
-            self,
-            room_id: UUID,
-            seconds: int
+        self,
+        room_id: UUID,
+        seconds: int
     ) -> None:
 
         try:
@@ -245,16 +255,8 @@ class GameManager:
 
         if self.is_last_question(room_id):
 
-            await self.connection_manager.broadcast(
-                room_id=room_id,
-                message={
-                    "type": "game_finished",
-                    "room_id": str(room_id),
-                    "reason" : "timeout"
-                }
-            )
-
-            self.cancel_question_timer(room_id)
+            if self.on_game_finished:
+                await self.on_game_finished(room_id)
 
             return
 
@@ -300,10 +302,13 @@ class GameManager:
 
         if game.question_task:
             game.question_task.cancel()
-
             game.question_task = None
 
-    def next_question(self, room_id: UUID) -> UUID | None:
+    def next_question(
+        self,
+        room_id: UUID
+    ) -> UUID | None:
+
         game = self.get_game(room_id)
 
         if not game:

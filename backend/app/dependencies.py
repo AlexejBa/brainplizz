@@ -18,7 +18,13 @@ def get_current_user_id(
     token: str = Depends(get_token)) -> UUID:
     try:
         payload = decode_access_token(token)
-    except Exception:
+    except Exception as error:
+        print(
+            "JWT VALIDATION ERROR:",
+            type(error).__name__,
+            str(error)
+        )
+
         raise HTTPException(
             status_code=401,
             detail="Недействительный или просроченный токен",

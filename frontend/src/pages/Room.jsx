@@ -521,7 +521,7 @@ function Room() {
         })}
       </ul>
 
-      {room.status === "waiting" && (
+      {room.status === "waiting" && !gameStarted && !gameFinished && (
         <div>
           <p>
             Ожидание игроков...
