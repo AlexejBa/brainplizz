@@ -239,129 +239,166 @@ function Room() {
   loadQuestion();
 }, [questionId]);
 
-  useEffect(() => {
-    if (!roomId) {
+ useEffect(() => {
+  if (!roomId) {
+    return;
+  }
+
+  const userId =
+    localStorage.getItem("user_id");
+
+  if (!userId) {
+    setWsStatus(
+      "Ошибка: пользователь не авторизован"
+    );
+    return;
+  }
+
+  let isUnmounted = false;
+
+  const socket = new WebSocket(
+    `ws://127.0.0.1:8000/ws/rooms/${roomId}?user_id=${userId}`
+  );
+
+  socket.onopen = () => {
+    if (isUnmounted) {
       return;
     }
 
-    const userId =
-      localStorage.getItem("user_id");
-
-    if (!userId) {
-      setWsStatus(
-        "Ошибка: пользователь не авторизован"
-      );
-      return;
-    }
-
-    const socket = new WebSocket(
-      `ws://127.0.0.1:8000/ws/rooms/${roomId}?user_id=${userId}`
+    console.log(
+      "WebSocket подключен"
     );
 
-    socket.onopen = () => {
+    setWsStatus("Подключено");
+  };
+
+  socket.onmessage = (event) => {
+    if (isUnmounted) {
+      return;
+    }
+
+    const message =
+      JSON.parse(event.data);
+
+    console.log(
+      "WebSocket сообщение:",
+      message
+    );
+
+    if (
+      message.type ===
+      "player_connected"
+    ) {
+      loadParticipants();
+    }
+
+    if (
+      message.type ===
+      "player_disconnected"
+    ) {
+      loadParticipants();
+    }
+
+    if (message.type === "game_started") {
+      setGameStarted(true);
+      setGameFinished(false);
+      setQuestionId(message.question_id);
+      questionIdRef.current = message.question_id;
+      setAnswerResult(null);
+
+      startLocalTimer();
+
       console.log(
-        "WebSocket подключен"
+        "Игра началась. Первый вопрос:",
+        message.question_id
       );
+    }
 
-      setWsStatus("Подключено");
-    };
+    if (message.type === "next_question") {
+      setQuestionId(message.question_id);
+      questionIdRef.current = message.question_id;
+      setAnswerResult(null);
 
-    socket.onmessage = (event) => {
-      const message =
-        JSON.parse(event.data);
+      startLocalTimer();
 
       console.log(
-        "WebSocket сообщение:",
-        message
+        "Следующий вопрос:",
+        message.question_id
       );
+    }
 
-      if (
-        message.type ===
-        "player_connected"
-      ) {
-        loadParticipants();
-      }
+    if (message.type === "question_timeout") {
+      setTimeLeft(0);
+      setAnswerResult(null);
 
-      if (
-        message.type ===
-        "player_disconnected"
-      ) {
-        loadParticipants();
-      }
-      if (message.type === "game_started") {
-        setGameStarted(true);
-        setGameFinished(false);
-        setQuestionId(message.question_id);
-        questionIdRef.current = message.question_id;
-        setAnswerResult(null);
-
-        startLocalTimer();
-
-        console.log(
-          "Игра началась. Первый вопрос:",
-          message.question_id
-        );
-      }
-      if (message.type === "next_question") {
-        setQuestionId(message.question_id);
-        questionIdRef.current = message.question_id;
-        setAnswerResult(null);
-        
-        startLocalTimer();
-
-        console.log(
-          "Следующий вопрос:",
-          message.question_id
-        );
-      }
-      if (message.type === "question_timeout") {
-        setTimeLeft(0);
-        setAnswerResult(null);
-        console.log("Время на вопрос истекло");
-      }
-      if (message.type === "game_finished") {
-        setGameFinished(true);
-        setTimeLeft(0);
-        setAnswerResult(null);
-
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-
-        console.log("Игра завершена");
-        loadLeaderboard();
-      }    
-    };
-
-    socket.onerror = (error) => {
-      console.error(
-        "WebSocket ошибка:",
-        error
-      );
-
-      setWsStatus(
-        "Ошибка подключения"
-      );
-    };
-
-    socket.onclose = () => {
       console.log(
-        "WebSocket отключен"
+        "Время на вопрос истекло"
       );
+    }
 
-      setWsStatus("Отключено");
-    };
-
-    return () => {
-      socket.close();
+    if (message.type === "game_finished") {
+      setGameFinished(true);
+      setTimeLeft(0);
+      setAnswerResult(null);
 
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-    };
-  }, [roomId]);
+
+      console.log(
+        "Игра завершена"
+      );
+
+      loadLeaderboard();
+    }
+  };
+
+  socket.onerror = (error) => {
+    if (isUnmounted) {
+      return;
+    }
+
+    console.error(
+      "WebSocket ошибка:",
+      error
+    );
+
+    setWsStatus(
+      "Ошибка подключения"
+    );
+  };
+
+  socket.onclose = (event) => {
+    if (isUnmounted) {
+      return;
+    }
+
+    console.log(
+      "WebSocket отключен",
+      event.code,
+      event.reason
+    );
+
+    setWsStatus("Отключено");
+  };
+
+  return () => {
+    isUnmounted = true;
+
+    if (
+      socket.readyState === WebSocket.CONNECTING ||
+      socket.readyState === WebSocket.OPEN
+    ) {
+      socket.close();
+    }
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+}, [roomId]);
 
   if (loading) {
     return (
