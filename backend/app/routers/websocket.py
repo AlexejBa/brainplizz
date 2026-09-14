@@ -96,11 +96,25 @@ async def websocket_room(
                     }
                 )
 
+
+
         await connection_manager.broadcast(
             room_id=room_id,
             message={
                 "type": "player_connected",
                 "user_id": str(user_id)
+            }
+        )
+        
+        await connection_manager.broadcast(
+            room_id=room_id,
+            message={
+                "type": "presence_updated",
+                "connected_user_ids": [
+                    str(connected_user_id)
+                    for connected_user_id
+                    in connection_manager.get_connected_user_ids(room_id)
+                ]
             }
         )
 
@@ -128,6 +142,19 @@ async def websocket_room(
                 message={
                     "type": "player_disconnected",
                     "user_id": str(user_id)
+                }
+            )
+
+
+            await connection_manager.broadcast(
+                room_id=room_id,
+                message={
+                    "type": "presence_updated",
+                    "connected_user_ids": [
+                        str(connected_user_id)
+                        for connected_user_id
+                        in connection_manager.get_connected_user_ids(room_id)
+                    ]
                 }
             )
 

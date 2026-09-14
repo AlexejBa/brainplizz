@@ -33,6 +33,15 @@ class ConnectionManager:
         if not self.rooms[room_id]:
             del self.rooms[room_id]
 
+    def get_connected_user_ids(
+        self,
+        room_id: UUID
+    ) -> list[UUID]:
+
+        return list(
+            self.rooms.get(room_id, {}).keys()
+        )
+
     async def send_to_user(
         self,
         room_id: UUID,

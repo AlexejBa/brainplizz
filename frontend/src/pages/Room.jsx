@@ -15,6 +15,7 @@ function Room() {
   const currentUserId = localStorage.getItem("user_id");
   const [room, setRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [connectedPlayers, setConnectedPlayers] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameFinished, setGameFinished] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -319,6 +320,12 @@ function Room() {
       loadParticipants();
     }
 
+    if (message.type === "presence_updated") {
+      setConnectedPlayers(
+        message.connected_user_ids || []
+      );
+    }
+
     if (message.type === "game_started") {
       setGameStarted(true);
       setGameFinished(false);
@@ -495,13 +502,23 @@ function Room() {
       )}
 
       <ul>
-        {participants.map(
-          (participant) => (
+        {participants.map((participant) => {
+          const isConnected = connectedPlayers.some(
+            (connectedUserId) =>
+              String(connectedUserId).toLowerCase() ===
+              String(participant.user_id).toLowerCase()
+          );
+
+          return (
             <li key={participant.id}>
               {participant.user_id}
+              {" — "}
+              {isConnected
+                ? "Подключён"
+                : "Отключён"}
             </li>
-          )
-        )}
+          );
+        })}
       </ul>
 
       {room.status === "waiting" && (
