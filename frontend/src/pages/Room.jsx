@@ -27,13 +27,50 @@ function Room() {
   const timerRef = useRef(null);
   const [currentParticipant, setCurrentParticipant] =
   useState(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
 
   const [wsStatus, setWsStatus] =
     useState("Подключение...");
   const isHost = room?.host_id === currentUserId;
+
+  function getAnswerText(answerNumber) {
+    if (!question) {
+      return "";
+    }
+
+    const answers = {
+      1: question.answer_1,
+      2: question.answer_2,
+      3: question.answer_3,
+      4: question.answer_4
+    };
+
+    return answers[answerNumber] || "";
+  }
+
+  function getAnswerClass(answerNumber) {
+    if (!answerResult) {
+      return "";
+    }
+
+    const correctAnswer = Number(answerResult.correct_answer);
+    const selectedAnswer = Number(answerResult.selected_answer);
+
+    if (answerNumber === correctAnswer) {
+      return "answer-correct";
+    }
+
+    if (
+      answerNumber === selectedAnswer &&
+      selectedAnswer !== correctAnswer
+    ) {
+      return "answer-wrong";
+    }
+
+    return "";
+  }
 
   function startLocalTimer(initialSeconds = 30) {
     if (timerRef.current) {
@@ -194,9 +231,10 @@ function Room() {
     }
   }
 
-  async function handleAnswer(selectedAnswer) {
+async function handleAnswer(selectedAnswer) {
   try {
     const answeredQuestionId = question.id;
+
     const result = await submitAnswer(
       currentParticipant.id,
       answeredQuestionId,
@@ -204,17 +242,25 @@ function Room() {
     );
 
     console.log("Результат ответа:", result);
-    
-    if (questionIdRef.current === answeredQuestionId) {
-      setAnswerResult(result);
+
+    if (
+      String(questionIdRef.current) ===
+      String(answeredQuestionId)
+    ) {
+      setAnswerResult({
+        ...result,
+        selected_answer: selectedAnswer,
+      });
     }
   } catch (error) {
     console.error(
       "Ошибка отправки ответа:",
       error
     );
+
     console.log("ОШИБКА ОТВЕТА:", error);
     console.log("ТИП ОШИБКИ:", typeof error);
+
     setError(
       error?.message ||
       String(error) ||
@@ -329,6 +375,7 @@ function Room() {
     if (message.type === "game_started") {
       setGameStarted(true);
       setGameFinished(false);
+      setQuestion(null);
       setQuestionId(message.question_id);
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
@@ -342,6 +389,7 @@ function Room() {
     }
 
     if (message.type === "next_question") {
+      setQuestion(null);
       setQuestionId(message.question_id);
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
@@ -357,6 +405,7 @@ function Room() {
   if (message.type === "current_question") {
     setGameStarted(true);
     setGameFinished(false);
+    setQuestion(null);
     setQuestionId(message.question_id);
     questionIdRef.current = message.question_id;
     setAnswerResult(null);
@@ -374,9 +423,30 @@ function Room() {
     );
   } 
 
+  if (message.type === "question_result") {
+    console.log(
+      "Результат вопроса:",
+      message
+    );
+
+    if (
+      String(questionIdRef.current) ===
+      String(message.question_id)
+    ) {
+      setAnswerResult((previousResult) => ({
+        ...previousResult,
+        correct_answer: message.correct_answer,
+        selected_answer: message.selected_answer,
+        is_correct:
+          String(message.correct_answer) ===
+          String(message.selected_answer)
+      }));
+    }
+  }
+
+
     if (message.type === "question_timeout") {
       setTimeLeft(0);
-      setAnswerResult(null);
 
       console.log(
         "Время на вопрос истекло"
@@ -603,26 +673,30 @@ function Room() {
             <p>Осталось времени: {timeLeft} сек.</p>
           )}
           <p>{question.text}</p>
-          <button onClick={() => handleAnswer(1)}
+          <button className={getAnswerClass(1)}
+            onClick={() => handleAnswer(1)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_1}
           </button>
-          <button onClick={() => handleAnswer(2)}
+          <button className={getAnswerClass(1)}
+            onClick={() => handleAnswer(2)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_2}
           </button>
-          <button onClick={() => handleAnswer(3)}
+          <button className={getAnswerClass(1)}
+            onClick={() => handleAnswer(3)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_3}
           </button>
-          <button onClick={() => handleAnswer(4)}
+          <button className={getAnswerClass(1)}
+            onClick={() => handleAnswer(4)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_4}
           </button>
+          
           {answerResult && (
             <div>
               <p>Ответ принят.</p>
-              <p>Ожидайте окончания вопроса.</p>
             </div>
           )}
         </div>

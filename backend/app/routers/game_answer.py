@@ -134,6 +134,49 @@ def build_game_result(
         participants=result_participants
     )
 
+
+async def broadcast_question_result(
+    room_id: UUID,
+    question_id: UUID,
+    db: Session
+) -> None:
+    question_repository = QuestionRepository(db)
+    participant_repository = GameParticipantRepository(db)
+    answer_repository = GameAnswerRepository(db)
+
+    question = question_repository.get_by_id(question_id)
+
+    if not question:
+        return
+
+    participants = participant_repository.get_by_room(room_id)
+
+    for participant in participants:
+        answer = (
+            answer_repository.get_by_participant_and_question(
+                participant_id=participant.id,
+                question_id=question_id
+            )
+        )
+
+        selected_answer = (
+            answer.selected_answer
+            if answer
+            else None
+        )
+
+        await connection_manager.send_to_user(
+            room_id=room_id,
+            user_id=participant.user_id,
+            message={
+                "type": "question_result",
+                "room_id": str(room_id),
+                "question_id": str(question_id),
+                "correct_answer": question.correct_answer,
+                "selected_answer": selected_answer
+            }
+        )
+
 async def move_to_next_question(
     room_id: UUID
 ):
@@ -324,15 +367,23 @@ async def submit_answer(
     )
 
     if all_answered:
+        game_manager.cancel_question_timer(
+            participant.room_id
+        )
+
+        await broadcast_question_result(
+            room_id=participant.room_id,
+            question_id=data.question_id,
+            db=db
+        )
+
         if game_manager.is_last_question(
             participant.room_id
         ):
             room.status = "finished"
             room_repository.update(room)
 
-            game_manager.cancel_question_timer(
-                participant.room_id
-            )
+            await asyncio.sleep(2)
 
             await connection_manager.broadcast(
                 room_id=participant.room_id,
@@ -347,10 +398,6 @@ async def submit_answer(
             )
 
         else:
-            game_manager.cancel_question_timer(
-                participant.room_id
-            )
-
             asyncio.create_task(
                 move_to_next_question(
                     participant.room_id
