@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user_id, get_db
-from app.models.game_room import GameRoom
+from app.models.game_room import GameRoom, GameRoomStatus
 from app.models.game_participant import GameParticipant
 from app.repositories.game_room_repository import GameRoomRepository
 from app.repositories.game_participant_repository import GameParticipantRepository
@@ -112,14 +112,11 @@ def join_room(
     if existing_participant:
         return existing_participant
 
-    if room.status != "waiting":
+    if room.status != GameRoomStatus.WAITING:
         raise HTTPException(
             status_code=400,
             detail="В эту комнату нельзя присоединиться"
         )
-
-    if existing_participant:
-        return existing_participant
 
     participants = participant_repository.get_by_room(room.id)
 
@@ -201,7 +198,7 @@ def set_ready(
             detail="Игровая комната не найдена"
         )
 
-    if room.status != "waiting":
+    if room.status != GameRoomStatus.WAITING:
         raise HTTPException(
             status_code=400,
             detail="Комната уже запущена"
@@ -252,7 +249,7 @@ async def start_game(
             detail="Только ведущий может начать игру"
         )
 
-    if room.status != "waiting":
+    if room.status != GameRoomStatus.WAITING:
         raise HTTPException(
             status_code=400,
             detail="Комната уже запущена или завершена"
@@ -280,8 +277,29 @@ async def start_game(
             detail="В игре нет вопросов"
         )
 
-    room.status = "playing"
+    room.status = GameRoomStatus.PLAYING
+
+    print(
+        f"START GAME DEBUG BEFORE UPDATE: "
+        f"room_id={room.id}, "
+        f"status={room.status}"
+    )
+
     room_repository.update(room)
+
+    print(
+        f"START GAME DEBUG AFTER UPDATE: "
+        f"room_id={room.id}, "
+        f"status={room.status}"
+    )
+
+    check_room = room_repository.get_by_id(room_id)
+
+    print(
+        f"START GAME DEBUG RELOAD: "
+        f"room_id={room_id}, "
+        f"status={check_room.status if check_room else None}"
+    )
 
     question_ids = [
         question.id

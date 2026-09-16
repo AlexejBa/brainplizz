@@ -22,6 +22,7 @@ function Room() {
   const [questionId, setQuestionId] = useState(null);
   const [question, setQuestion] = useState(null);
   const questionIdRef = useRef(null);
+  const socketRef = useRef(null);
   const [answerResult, setAnswerResult] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
@@ -268,6 +269,68 @@ async function handleAnswer(selectedAnswer) {
     );
   }
 }
+
+
+async function handleNextQuestion() {
+
+  console.log(
+    "НАЖАТА КНОПКА СЛЕДУЮЩИЙ ВОПРОС"
+  );
+
+  console.log(
+    "isHost:",
+    isHost
+  );
+
+  console.log(
+    "socket:",
+    socketRef.current
+  );
+
+  console.log(
+    "socket readyState:",
+    socketRef.current?.readyState
+  );
+  try {
+    setError("");
+
+    if (!isHost) {
+      setError(
+        "Только ведущий может перейти к следующему вопросу"
+      );
+      return;
+    }
+
+    if (
+      !socketRef.current ||
+      socketRef.current.readyState !== WebSocket.OPEN
+    ) {
+      setError(
+        "WebSocket не подключён"
+      );
+      return;
+    }
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: "next_question"
+      })
+    );
+  } catch (error) {
+    console.error(
+      "Ошибка перехода к следующему вопросу:",
+      error
+    );
+
+    setError(
+      error.message ||
+      "Не удалось перейти к следующему вопросу"
+    );
+  }
+}
+
+
+
   useEffect(() => {
     if (!roomId) {
       setError("ID комнаты отсутствует");
@@ -327,6 +390,7 @@ async function handleAnswer(selectedAnswer) {
     `ws://127.0.0.1:8000/ws/rooms/${roomId}?user_id=${userId}`
   );
 
+  socketRef.current = socket;
   socket.onopen = () => {
     if (isUnmounted) {
       return;
@@ -424,25 +488,22 @@ async function handleAnswer(selectedAnswer) {
   } 
 
   if (message.type === "question_result") {
-    console.log(
-      "Результат вопроса:",
-      message
-    );
+  console.log("Результат вопроса:", message);
 
-    if (
-      String(questionIdRef.current) ===
-      String(message.question_id)
-    ) {
-      setAnswerResult((previousResult) => ({
-        ...previousResult,
-        correct_answer: message.correct_answer,
-        selected_answer: message.selected_answer,
-        is_correct:
-          String(message.correct_answer) ===
+  if (
+    String(questionIdRef.current) ===
+    String(message.question_id)
+  ) {
+    setAnswerResult({
+      correct_answer: message.correct_answer,
+      selected_answer: message.selected_answer,
+      is_correct:
+        message.selected_answer !== null &&
+        String(message.correct_answer) ===
           String(message.selected_answer)
-      }));
-    }
+    });
   }
+}
 
 
     if (message.type === "question_timeout") {
@@ -508,6 +569,9 @@ async function handleAnswer(selectedAnswer) {
       socket.readyState === WebSocket.OPEN
     ) {
       socket.close();
+    }
+    if (socketRef.current === socket) {
+      socketRef.current = null;
     }
 
     if (timerRef.current) {
@@ -678,17 +742,17 @@ async function handleAnswer(selectedAnswer) {
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_1}
           </button>
-          <button className={getAnswerClass(1)}
+          <button className={getAnswerClass(2)}
             onClick={() => handleAnswer(2)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_2}
           </button>
-          <button className={getAnswerClass(1)}
+          <button className={getAnswerClass(3)}
             onClick={() => handleAnswer(3)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_3}
           </button>
-          <button className={getAnswerClass(1)}
+          <button className={getAnswerClass(4)}
             onClick={() => handleAnswer(4)}
             disabled={answerResult !== null || timeLeft === 0}>
             {question.answer_4}
@@ -696,9 +760,22 @@ async function handleAnswer(selectedAnswer) {
           
           {answerResult && (
             <div>
-              <p>Ответ принят.</p>
+              {answerResult.selected_answer === null ? (
+                <p>Время вышло. Ответ не выбран.</p>
+              ) : (
+                <p>Ответ принят.</p>
+              )}
             </div>
           )}
+
+          {answerResult && isHost && (
+            <div>
+              <button onClick={handleNextQuestion}>
+                Следующий вопрос
+              </button>
+            </div>
+          )}
+
         </div>
       )}
     </div>

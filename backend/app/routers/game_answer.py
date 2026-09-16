@@ -33,10 +33,12 @@ from app.schemas.game_answer import (
 
 from app.schemas.question import GameQuestionResponse
 
+
 router = APIRouter(
     prefix="/game",
     tags=["Game"]
 )
+
 
 def build_game_result(
     room_id: UUID,
@@ -177,50 +179,6 @@ async def broadcast_question_result(
             }
         )
 
-async def move_to_next_question(
-    room_id: UUID
-):
-    await asyncio.sleep(2)
-
-    game = game_manager.get_game(room_id)
-
-    if not game:
-        return
-
-    if game_manager.is_last_question(room_id):
-        return
-
-    next_question_id = game_manager.next_question(
-        room_id
-    )
-
-    if not next_question_id:
-        return
-
-    game = game_manager.get_game(room_id)
-
-    if not game:
-        return
-
-    game_manager.start_question_timer(
-        room_id=room_id,
-        seconds=30
-    )
-
-    next_index = game.current_question_index + 1
-
-    await connection_manager.broadcast(
-        room_id=room_id,
-        message={
-            "type": "next_question",
-            "room_id": str(room_id),
-            "question_id": str(next_question_id),
-            "question_number": game.current_question_index + 1,
-            "total_questions": len(
-                game.question_ids
-            )
-        }
-    )
 
 @router.post(
     "/answers",
@@ -263,7 +221,7 @@ async def submit_answer(
             detail="Игровая комната не найдена"
         )
 
-    if room.status != "playing":
+    if room.status != GameRoomStatus.PLAYING:
         raise HTTPException(
             status_code=400,
             detail="Игра не находится в активном состоянии"
@@ -310,7 +268,9 @@ async def submit_answer(
             detail="Вы уже отвечали на этот вопрос"
         )
 
-    is_correct = data.selected_answer == question.correct_answer
+    is_correct = (
+        data.selected_answer == question.correct_answer
+    )
 
     base_score = 100 if is_correct else 0
 
@@ -380,7 +340,7 @@ async def submit_answer(
         if game_manager.is_last_question(
             participant.room_id
         ):
-            room.status = "finished"
+            room.status = GameRoomStatus.FINISHED
             room_repository.update(room)
 
             await asyncio.sleep(2)
@@ -395,13 +355,6 @@ async def submit_answer(
 
             game_manager.remove_game(
                 participant.room_id
-            )
-
-        else:
-            asyncio.create_task(
-                move_to_next_question(
-                    participant.room_id
-                )
             )
 
     return created_answer
@@ -428,7 +381,7 @@ def get_current_question(
             detail="Игровая комната не найдена"
         )
 
-    if room.status != "playing":
+    if room.status != GameRoomStatus.PLAYING:
         raise HTTPException(
             status_code=400,
             detail="Игра ещё не началась"
@@ -517,6 +470,7 @@ def get_game_statistics(
         correct_count=correct_count
     )
 
+
 @router.get(
     "/rooms/{room_id}/leaderboard",
     response_model=GameResultResponse
@@ -526,6 +480,7 @@ def get_room_leaderboard(
     db: Session = Depends(get_db)
 ):
     return build_game_result(room_id, db)
+
 
 @router.post(
     "/rooms/{room_id}/finish",
@@ -549,7 +504,7 @@ def finish_game(
             detail="Игровая комната не найдена"
         )
 
-    if room.status != "playing":
+    if room.status != GameRoomStatus.PLAYING:
         raise HTTPException(
             status_code=400,
             detail="Игра не находится в активном состоянии"
@@ -586,7 +541,7 @@ def finish_game(
             detail="Вы ещё не ответили на все вопросы"
         )
 
-    room.status = "finished"
+    room.status = GameRoomStatus.FINISHED
     room_repository.update(room)
 
     participants = participant_repository.get_by_room(

@@ -23,6 +23,8 @@ class RoomGameState:
 
     question_task: asyncio.Task | None = None
 
+    question_finished: bool = False
+
     @property
     def current_question_id(self) -> UUID | None:
         if self.current_question_index >= len(
@@ -39,12 +41,12 @@ class GameManager:
     def __init__(
         self,
         connection_manager: ConnectionManager,
-        on_game_finished: (
-            Callable[[UUID], Awaitable[None]] | None
+        on_question_finished: (
+            Callable[[UUID, UUID], Awaitable[None]] | None
         ) = None
     ):
         self.connection_manager = connection_manager
-        self.on_game_finished = on_game_finished
+        self.on_question_finished = on_question_finished
 
         self.games: dict[
             UUID,
@@ -203,6 +205,7 @@ class GameManager:
             game.question_task.cancel()
 
         game.question_started_at = datetime.utcnow()
+        game.question_finished = False
 
         game.question_task = asyncio.create_task(
             self._question_timer(
@@ -239,56 +242,29 @@ class GameManager:
         if not game:
             return
 
+        if game.question_finished:
+            return
+
         current_question_id = game.current_question_id
+
+        if not current_question_id:
+            return
+
+        game.question_finished = True
 
         await self.connection_manager.broadcast(
             room_id=room_id,
             message={
                 "type": "question_timeout",
-                "question_id": (
-                    str(current_question_id)
-                    if current_question_id
-                    else None
-                )
+                "question_id": str(current_question_id)
             }
         )
 
-        if self.is_last_question(room_id):
-
-            if self.on_game_finished:
-                await self.on_game_finished(room_id)
-
-            return
-
-        next_question_id = self.next_question(room_id)
-
-        if not next_question_id:
-            return
-
-        game = self.get_game(room_id)
-
-        if not game:
-            return
-
-        await self.connection_manager.broadcast(
-            room_id=room_id,
-            message={
-                "type": "next_question",
-                "room_id": str(room_id),
-                "question_id": str(next_question_id),
-                "question_number": (
-                    game.current_question_index + 1
-                ),
-                "total_questions": len(
-                    game.question_ids
-                )
-            }
-        )
-
-        self.start_question_timer(
-            room_id=room_id,
-            seconds=30
-        )
+        if self.on_question_finished:
+            await self.on_question_finished(
+                room_id,
+                current_question_id
+            )
 
     def cancel_question_timer(
         self,
@@ -314,6 +290,9 @@ class GameManager:
         if not game:
             return None
 
+        if not game.question_finished:
+            return None
+
         if self.is_last_question(room_id):
             return None
 
@@ -322,6 +301,7 @@ class GameManager:
         game.current_question_index += 1
         game.answered_players.clear()
         game.question_started_at = None
+        game.question_finished = False
 
         return game.current_question_id
 
