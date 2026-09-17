@@ -24,6 +24,7 @@ function Room() {
   const questionIdRef = useRef(null);
   const socketRef = useRef(null);
   const [answerResult, setAnswerResult] = useState(null);
+  const [answerSubmitted, setAnswerSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
   const [currentParticipant, setCurrentParticipant] =
@@ -248,10 +249,7 @@ async function handleAnswer(selectedAnswer) {
       String(questionIdRef.current) ===
       String(answeredQuestionId)
     ) {
-      setAnswerResult({
-        ...result,
-        selected_answer: selectedAnswer,
-      });
+      setAnswerSubmitted(true);
     }
   } catch (error) {
     console.error(
@@ -443,6 +441,7 @@ async function handleNextQuestion() {
       setQuestionId(message.question_id);
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
+      setAnswerSubmitted(false);
 
       startLocalTimer();
 
@@ -457,6 +456,7 @@ async function handleNextQuestion() {
       setQuestionId(message.question_id);
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
+      setAnswerSubmitted(false);
 
       startLocalTimer();
 
@@ -473,6 +473,7 @@ async function handleNextQuestion() {
     setQuestionId(message.question_id);
     questionIdRef.current = message.question_id;
     setAnswerResult(null);
+    setAnswerSubmitted(false);
 
     const remainingSeconds =
       message.remaining_seconds ?? 30;
@@ -613,112 +614,284 @@ async function handleNextQuestion() {
   }
 
   return (
-    <div>
-      <h1>BrainPlizz</h1>
+  <main className="room-page">
+    <div className="room-container">
 
-      <h2>Игровая комната</h2>
-
-      <p>Код комнаты:</p>
-
-      <h3>{room.code}</h3>
-
-      <p>
-        WebSocket: {wsStatus}
-      </p>
-
-      <p>
-        Игроки: {participants.length} /{" "}
-        {room.max_players}
-      </p>
-
-      {error && (
-        <p>{error}</p>
-      )}
-
-      <ul>
-        {participants.map((participant) => {
-          const isConnected = connectedPlayers.some(
-            (connectedUserId) =>
-              String(connectedUserId).toLowerCase() ===
-              String(participant.user_id).toLowerCase()
-          );
-
-          return (
-            <li key={participant.id}>
-              {participant.user_id}
-              {" — "}
-              {isConnected
-                ? "Подключён"
-                : "Отключён"}
-            </li>
-          );
-        })}
-      </ul>
-
-      {room.status === "waiting" && !gameStarted && !gameFinished && (
+     
+      <section className="room-header">
         <div>
+          <div className="room-badge">
+            🎮 ИГРОВАЯ КОМНАТА
+          </div>
+
+          <h1 className="room-title">
+            Комната
+          </h1>
+
+          <p className="room-subtitle">
+            Игроки подключаются к игре в реальном времени
+          </p>
+        </div>
+
+        <div
+          className={`room-connection-status ${
+            wsStatus === "Подключено"
+              ? "room-connection-online"
+              : ""
+          }`}
+        >
+          <span className="room-status-dot"></span>
+          {wsStatus}
+        </div>
+      </section>
+
+
+      
+      {!gameStarted && !gameFinished && (
+        <section className="room-layout">
+
+        
+        <div className="room-main-card">
+
+          <div className="room-code-section">
+            <p className="room-label">
+              КОД КОМНАТЫ
+            </p>
+
+            <div className="room-code">
+              {room.code}
+            </div>
+
+            <p className="room-code-hint">
+              Передайте этот код игрокам,
+              чтобы они могли присоединиться
+            </p>
+          </div>
+
+
+          <div className="room-divider"></div>
+
+
+          
+          <div className="room-players-header">
+            <div>
+              <h2>Игроки</h2>
+
+              <p>
+                Участники комнаты
+              </p>
+            </div>
+
+            <div className="room-player-count">
+              {participants.length}
+              <span>
+                / {room.max_players}
+              </span>
+            </div>
+          </div>
+
+
+          <div className="room-players-list">
+            {participants.map((participant, index) => {
+              const isConnected = connectedPlayers.some(
+                (connectedUserId) =>
+                  String(connectedUserId).toLowerCase() ===
+                  String(participant.user_id).toLowerCase()
+              );
+
+              const isCurrentUser =
+                String(participant.user_id).toLowerCase() ===
+                String(currentUserId).toLowerCase();
+
+              const isParticipantHost =
+                String(participant.user_id).toLowerCase() ===
+                String(room.host_id).toLowerCase();
+
+              return (
+                <div
+                  className="room-player"
+                  key={participant.id}
+                >
+                  <div className="room-player-number">
+                    {index + 1}
+                  </div>
+
+                  <div className="room-player-avatar">
+                    {participant.user_id
+                      ?.slice(0, 1)
+                      .toUpperCase()}
+                  </div>
+
+                  <div className="room-player-info">
+                    <div className="room-player-name">
+                      {participant.user_id}
+
+                      {isCurrentUser && (
+                        <span className="room-player-you">
+                          Вы
+                        </span>
+                      )}
+
+                      {isParticipantHost && (
+                        <span className="room-player-host">
+                          👑
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="room-player-status">
+                      <span
+                        className={`room-status-dot ${
+                          isConnected
+                            ? "room-status-dot-online"
+                            : "room-status-dot-offline"
+                        }`}
+                      ></span>
+
+                      {isConnected
+                        ? "Подключён"
+                        : "Отключён"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+
+          
+          {room.status === "waiting" &&
+            !gameStarted &&
+            !gameFinished && (
+              <div className="room-waiting">
+
+                <div className="room-waiting-icon">
+                  ⏳
+                </div>
+
+                <div className="room-waiting-text">
+                  <h3>
+                    Ожидание игроков
+                  </h3>
+
+                  <p>
+                    Когда все будут готовы,
+                    ведущий сможет начать игру.
+                  </p>
+                </div>
+              </div>
+            )}
+
+
+          
+          {room.status === "waiting" &&
+            !gameStarted &&
+            !gameFinished && (
+              <div className="room-actions">
+
+                <button
+                  className="room-button room-button-secondary"
+                  onClick={handleReady}
+                >
+                  ✓ Я готов
+                </button>
+
+                {isHost && (
+                  <button
+                    className="room-button room-button-primary"
+                    onClick={handleStartGame}
+                  >
+                    Начать игру
+                    <span>→</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+        </div>
+
+
+        <aside className="room-side-card">
+
+          <div className="room-side-glow"></div>
+
+          <div className="room-side-icon">
+            🧠
+          </div>
+
+          <h2>
+            Готовы сыграть?
+          </h2>
+
           <p>
-            Ожидание игроков...
+            Соберите команду, выберите
+            ответы и узнайте, кто окажется
+            самым быстрым и внимательным.
           </p>
 
-          <button onClick={handleReady}>
-            Я готов
-          </button>
+          <div className="room-side-features">
+            <div>
+              <span>⚡</span>
+              <p>В реальном времени</p>
+            </div>
 
-          {isHost && (
-            <button onClick={handleStartGame}>
-              Начать игру
-            </button>
-          )}
-        </div>
+            <div>
+              <span>⏱</span>
+              <p>30 секунд на вопрос</p>
+            </div>
+
+            <div>
+              <span>🏆</span>
+              <p>Итоговый рейтинг</p>
+            </div>
+          </div>
+
+        </aside>
+
+      </section>
       )}
+
       {gameFinished && (
-        <div>
+        <section className="game-finished-card">
+          <div className="game-finished-icon">
+            🏆
+          </div>
+
           <h2>Игра завершена!</h2>
 
-          <p>Все вопросы закончились.</p>
+          <p>
+            Все вопросы закончились.
+          </p>
 
           <h3>Итоговая таблица</h3>
 
           {leaderboard.length === 0 ? (
             <p>Загрузка результатов...</p>
           ) : (
-            <table
-              border="1"
-              cellPadding="8"
-              style={{
-                borderCollapse: "collapse",
-                width: "100%",
-                textAlign: "center",
-              }}>
+            <table className="leaderboard-table">
               <thead>
                 <tr>
-                  <th style={{ padding: "12px", minWidth: "80px" }}>
-                    Место
-                  </th>
-                  <th style={{ padding: "12px", minWidth: "160px" }}>
-                    Игрок
-                  </th>
-                  <th style={{ padding: "12px", minWidth: "100px" }}>
-                    Баллы
-                  </th>
+                  <th>Место</th>
+                  <th>Игрок</th>
+                  <th>Баллы</th>
                 </tr>
               </thead>
+
               <tbody>
                 {leaderboard.map((participant) => (
                   <tr key={participant.participant_id}>
-                    <td style={{ padding: "12px" }}>
+                    <td>
                       {participant.place}
                     </td>
 
-                    <td style={{ padding: "12px" }}>
+                    <td>
                       {participant.username ||
                         participant.name ||
                         participant.user_name ||
                         participant.user_id}
                     </td>
 
-                    <td style={{ padding: "12px" }}>
+                    <td>
                       {participant.score}
                     </td>
                   </tr>
@@ -727,59 +900,240 @@ async function handleNextQuestion() {
             </table>
           )}
 
-          <p>Спасибо за участие!</p>
-        </div>
+          <p className="game-finished-thanks">
+            Спасибо за участие!
+          </p>
+        </section>
       )}
+
       {gameStarted && question && !gameFinished && (
-        <div>
-          <h2>Вопрос</h2>
-          {timeLeft !== null && (
-            <p>Осталось времени: {timeLeft} сек.</p>
-          )}
-          <p>{question.text}</p>
-          <button className={getAnswerClass(1)}
-            onClick={() => handleAnswer(1)}
-            disabled={answerResult !== null || timeLeft === 0}>
-            {question.answer_1}
-          </button>
-          <button className={getAnswerClass(2)}
-            onClick={() => handleAnswer(2)}
-            disabled={answerResult !== null || timeLeft === 0}>
-            {question.answer_2}
-          </button>
-          <button className={getAnswerClass(3)}
-            onClick={() => handleAnswer(3)}
-            disabled={answerResult !== null || timeLeft === 0}>
-            {question.answer_3}
-          </button>
-          <button className={getAnswerClass(4)}
-            onClick={() => handleAnswer(4)}
-            disabled={answerResult !== null || timeLeft === 0}>
-            {question.answer_4}
-          </button>
-          
-          {answerResult && (
+        <section className="game-question-card">
+
+          <div className="game-question-header">
             <div>
-              {answerResult.selected_answer === null ? (
-                <p>Время вышло. Ответ не выбран.</p>
-              ) : (
-                <p>Ответ принят.</p>
-              )}
+              <div className="game-question-label">
+                ВОПРОС
+              </div>
+
+              <h2>
+                Ответьте на вопрос
+              </h2>
+            </div>
+
+            <div className="game-timer">
+              <span className="game-timer-icon">
+                ⏱
+              </span>
+
+              <div>
+                <strong>
+                  {timeLeft ?? 0}
+                </strong>
+
+                <small>
+                  секунд
+                </small>
+              </div>
+            </div>
+          </div>
+
+
+          <div className="game-question-progress">
+            <div
+              className="game-question-progress-bar"
+              style={{
+                width: `${Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    ((timeLeft ?? 0) / 30) * 100
+                  )
+                )}%`,
+              }}
+            ></div>
+          </div>
+
+
+          <div className="game-question-number">
+            Текущий вопрос
+          </div>
+
+          <h1 className="game-question-text">
+            {question.text}
+          </h1>
+
+
+          <div className="game-answers">
+
+            <button
+              className={`game-answer ${getAnswerClass(1)}`}
+              onClick={() => handleAnswer(1)}
+              disabled={
+                answerSubmitted ||
+                answerResult !== null ||
+                timeLeft === 0
+              }
+            >
+              <span className="game-answer-letter">
+                A
+              </span>
+
+              <span className="game-answer-text">
+                {question.answer_1}
+              </span>
+            </button>
+
+
+            <button
+              className={`game-answer ${getAnswerClass(2)}`}
+              onClick={() => handleAnswer(2)}
+              disabled={
+                answerSubmitted ||
+                answerResult !== null ||
+                timeLeft === 0
+              }
+            >
+              <span className="game-answer-letter">
+                B
+              </span>
+
+              <span className="game-answer-text">
+                {question.answer_2}
+              </span>
+            </button>
+
+
+            <button
+              className={`game-answer ${getAnswerClass(3)}`}
+              onClick={() => handleAnswer(3)}
+              disabled={
+                answerSubmitted ||
+                answerResult !== null ||
+                timeLeft === 0
+              }
+            >
+              <span className="game-answer-letter">
+                C
+              </span>
+
+              <span className="game-answer-text">
+                {question.answer_3}
+              </span>
+            </button>
+
+
+            <button
+              className={`game-answer ${getAnswerClass(4)}`}
+              onClick={() => handleAnswer(4)}
+              disabled={
+                answerSubmitted ||
+                answerResult !== null ||
+                timeLeft === 0
+              }
+            >
+              <span className="game-answer-letter">
+                D
+              </span>
+
+              <span className="game-answer-text">
+                {question.answer_4}
+              </span>
+            </button>
+
+          </div>
+
+          {answerSubmitted && !answerResult && (
+            <div className="game-answer-result">
+              <span className="game-result-icon">
+                ✓
+              </span>
+
+              <div>
+                <strong>
+                  Ответ принят
+                </strong>
+
+                <p>
+                  Ждём остальных игроков...
+                </p>
+              </div>
             </div>
           )}
+
+
+          {answerResult && (
+            <div className="game-answer-result">
+
+              {answerResult.selected_answer === null ? (
+                <>
+                  <span className="game-result-icon">
+                    ⏰
+                  </span>
+
+                  <div>
+                    <strong>
+                      Время вышло
+                    </strong>
+
+                    <p>
+                      Ответ не был выбран.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="game-result-icon">
+                    ✓
+                  </span>
+
+                  <div>
+                    <strong>
+                      Ответ принят
+                    </strong>
+
+                    <p>
+                      Результат вопроса показан на экране.
+                    </p>
+                  </div>
+                </>
+              )}
+
+            </div>
+          )}
+
 
           {answerResult && isHost && (
-            <div>
-              <button onClick={handleNextQuestion}>
+            <div className="game-next-question">
+
+              <p>
+                Вопрос завершён. Ведущий может
+                перейти дальше.
+              </p>
+
+              <button
+                className="room-button room-button-primary"
+                onClick={handleNextQuestion}
+              >
                 Следующий вопрос
+                <span>→</span>
               </button>
+
             </div>
           )}
 
+        </section>
+      )}
+
+
+      {error && (
+        <div className="room-error">
+          <span>⚠</span>
+          <p>{error}</p>
         </div>
       )}
-    </div>
-  );
-}
 
+    </div>
+  </main>
+);
+}
 export default Room;

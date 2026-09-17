@@ -1,5 +1,3 @@
-import asyncio
-
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -327,6 +325,8 @@ async def submit_answer(
     )
 
     if all_answered:
+        game.question_finished = True
+
         game_manager.cancel_question_timer(
             participant.room_id
         )
@@ -336,26 +336,6 @@ async def submit_answer(
             question_id=data.question_id,
             db=db
         )
-
-        if game_manager.is_last_question(
-            participant.room_id
-        ):
-            room.status = GameRoomStatus.FINISHED
-            room_repository.update(room)
-
-            await asyncio.sleep(2)
-
-            await connection_manager.broadcast(
-                room_id=participant.room_id,
-                message={
-                    "type": "game_finished",
-                    "room_id": str(participant.room_id)
-                }
-            )
-
-            game_manager.remove_game(
-                participant.room_id
-            )
 
     return created_answer
 
