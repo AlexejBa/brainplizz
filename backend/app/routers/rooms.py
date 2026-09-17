@@ -313,6 +313,11 @@ async def start_game(
 
     current_question_id = game.current_question_id
 
+    game_manager.start_question_timer(
+        room_id=room_id,
+        seconds=30
+    )
+
     await connection_manager.broadcast(
         room_id=room_id,
         message={
@@ -326,11 +331,6 @@ async def start_game(
             "question_number": 1,
             "total_questions": len(question_ids)
         }
-    )
-
-    game_manager.start_question_timer(
-        room_id=room_id,
-        seconds=30
     )
 
     return {

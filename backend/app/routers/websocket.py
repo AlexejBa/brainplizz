@@ -5,10 +5,18 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models.game_room import GameRoomStatus
+from app.repositories.game_answer_repository import (
+    GameAnswerRepository
+)
+
 from app.repositories.game_participant_repository import (
     GameParticipantRepository
 )
+
 from app.repositories.game_room_repository import GameRoomRepository
+from app.repositories.question_repository import (
+    QuestionRepository
+)
 from app.game_state import (
     connection_manager,
     game_manager
@@ -41,6 +49,8 @@ async def websocket_room(
 
         room_repository = GameRoomRepository(db)
         participant_repository = GameParticipantRepository(db)
+        answer_repository = GameAnswerRepository(db)
+        question_repository = QuestionRepository(db)
 
         room = room_repository.get_by_id(room_id)
 
@@ -86,6 +96,37 @@ async def websocket_room(
                     seconds=30
                 )
 
+                existing_answer = (
+                    answer_repository.get_by_participant_and_question(
+                        participant_id=participant.id,
+                        question_id=current_question_id
+                    )
+                )
+
+                selected_answer = (
+                    existing_answer.selected_answer
+                    if existing_answer
+                    else None
+                )
+
+                current_question = question_repository.get_by_id(
+                    current_question_id
+                )
+
+                correct_answer = (
+                    current_question.correct_answer
+                    if current_question
+                    else None
+                )
+
+                game = game_manager.get_game(room_id)
+
+                question_finished = (
+                    game.question_finished
+                    if game
+                    else False
+                )
+
                 await connection_manager.send_to_user(
                     room_id=room_id,
                     user_id=user_id,
@@ -93,7 +134,10 @@ async def websocket_room(
                         "type": "current_question",
                         "room_id": str(room_id),
                         "question_id": str(current_question_id),
-                        "remaining_seconds": remaining_seconds
+                        "remaining_seconds": remaining_seconds,
+                        "selected_answer": selected_answer,
+                        "correct_answer": correct_answer,
+                        "question_finished": question_finished
                     }
                 )
 

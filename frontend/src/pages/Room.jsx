@@ -25,6 +25,7 @@ function Room() {
   const socketRef = useRef(null);
   const [answerResult, setAnswerResult] = useState(null);
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
   const [currentParticipant, setCurrentParticipant] =
@@ -235,6 +236,7 @@ function Room() {
 
 async function handleAnswer(selectedAnswer) {
   try {
+    setSelectedAnswer(selectedAnswer);
     const answeredQuestionId = question.id;
 
     const result = await submitAnswer(
@@ -442,8 +444,8 @@ async function handleNextQuestion() {
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
       setAnswerSubmitted(false);
-
-      startLocalTimer();
+      setSelectedAnswer(null);
+      setTimeLeft(null);
 
       console.log(
         "Игра началась. Первый вопрос:",
@@ -457,8 +459,8 @@ async function handleNextQuestion() {
       questionIdRef.current = message.question_id;
       setAnswerResult(null);
       setAnswerSubmitted(false);
-
-      startLocalTimer();
+      setSelectedAnswer(null);
+      setTimeLeft(null);
 
       console.log(
         "Следующий вопрос:",
@@ -472,13 +474,32 @@ async function handleNextQuestion() {
     setQuestion(null);
     setQuestionId(message.question_id);
     questionIdRef.current = message.question_id;
-    setAnswerResult(null);
-    setAnswerSubmitted(false);
+    setAnswerSubmitted(
+      message.selected_answer !== null &&
+      message.selected_answer !== undefined
+    );
+
+    setSelectedAnswer(
+      message.selected_answer ?? null
+    );
+
+    if (message.question_finished) {
+      setAnswerResult({
+        correct_answer: message.correct_answer,
+        selected_answer: message.selected_answer,
+        is_correct:
+          message.selected_answer !== null &&
+          String(message.correct_answer) ===
+            String(message.selected_answer)
+      });
+    } else {
+      setAnswerResult(null);
+    }
 
     const remainingSeconds =
       message.remaining_seconds ?? 30;
 
-    startLocalTimer(remainingSeconds);
+    setTimeLeft(remainingSeconds);
 
     console.log(
       "Восстановлен текущий вопрос:",
@@ -488,23 +509,42 @@ async function handleNextQuestion() {
     );
   } 
 
-  if (message.type === "question_result") {
-  console.log("Результат вопроса:", message);
-
-  if (
-    String(questionIdRef.current) ===
-    String(message.question_id)
-  ) {
-    setAnswerResult({
-      correct_answer: message.correct_answer,
-      selected_answer: message.selected_answer,
-      is_correct:
-        message.selected_answer !== null &&
-        String(message.correct_answer) ===
-          String(message.selected_answer)
-    });
+  if (message.type === "timer_update") {
+    if (
+      String(questionIdRef.current) ===
+      String(message.question_id)
+    ) {
+      setTimeLeft(
+        Math.max(
+          0,
+          Number(message.remaining_seconds)
+        )
+      );
+    }
   }
-}
+
+  if (message.type === "question_result") {
+    console.log("Результат вопроса:", message);
+
+    if (
+      String(questionIdRef.current) ===
+      String(message.question_id)
+    ) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      setAnswerResult({
+        correct_answer: message.correct_answer,
+        selected_answer: message.selected_answer,
+        is_correct:
+          message.selected_answer !== null &&
+          String(message.correct_answer) ===
+            String(message.selected_answer)
+      });
+    }
+  }
 
 
     if (message.type === "question_timeout") {
@@ -920,7 +960,15 @@ async function handleNextQuestion() {
               </h2>
             </div>
 
-            <div className="game-timer">
+            <div
+              className={`game-timer ${
+                timeLeft !== null && timeLeft <= 5
+                  ? "game-timer-critical"
+                  : timeLeft !== null && timeLeft <= 15
+                    ? "game-timer-warning"
+                    : ""
+              }`}
+            >
               <span className="game-timer-icon">
                 ⏱
               </span>
@@ -940,7 +988,13 @@ async function handleNextQuestion() {
 
           <div className="game-question-progress">
             <div
-              className="game-question-progress-bar"
+              className={`game-question-progress-bar ${
+                timeLeft !== null && timeLeft <= 5
+                  ? "progress-critical"
+                  : timeLeft !== null && timeLeft <= 15
+                    ? "progress-warning"
+                    : ""
+              }`}
               style={{
                 width: `${Math.max(
                   0,
@@ -966,7 +1020,9 @@ async function handleNextQuestion() {
           <div className="game-answers">
 
             <button
-              className={`game-answer ${getAnswerClass(1)}`}
+              className={`game-answer ${
+                selectedAnswer === 1 ? "answer-selected" : ""
+              } ${getAnswerClass(1)}`}
               onClick={() => handleAnswer(1)}
               disabled={
                 answerSubmitted ||
@@ -985,7 +1041,9 @@ async function handleNextQuestion() {
 
 
             <button
-              className={`game-answer ${getAnswerClass(2)}`}
+              className={`game-answer ${
+                selectedAnswer === 2 ? "answer-selected" : ""
+              } ${getAnswerClass(2)}`}
               onClick={() => handleAnswer(2)}
               disabled={
                 answerSubmitted ||
@@ -1004,7 +1062,9 @@ async function handleNextQuestion() {
 
 
             <button
-              className={`game-answer ${getAnswerClass(3)}`}
+              className={`game-answer ${
+                selectedAnswer === 3 ? "answer-selected" : ""
+              } ${getAnswerClass(3)}`}
               onClick={() => handleAnswer(3)}
               disabled={
                 answerSubmitted ||
@@ -1023,7 +1083,9 @@ async function handleNextQuestion() {
 
 
             <button
-              className={`game-answer ${getAnswerClass(4)}`}
+              className={`game-answer ${
+                selectedAnswer === 4 ? "answer-selected" : ""
+              } ${getAnswerClass(4)}`}
               onClick={() => handleAnswer(4)}
               disabled={
                 answerSubmitted ||
@@ -1062,7 +1124,15 @@ async function handleNextQuestion() {
 
 
           {answerResult && (
-            <div className="game-answer-result">
+            <div
+              className={`game-answer-result ${
+                answerResult.selected_answer === null
+                  ? "result-timeout"
+                  : answerResult.is_correct
+                    ? "result-correct"
+                    : "result-wrong"
+              }`}
+            >
 
               {answerResult.selected_answer === null ? (
                 <>

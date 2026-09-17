@@ -225,7 +225,39 @@ class GameManager:
                 f"GAME TIMER WAITING: room={room_id}, seconds={seconds}"
             )
 
-            await asyncio.sleep(seconds)
+            while True:
+                game = self.get_game(room_id)
+
+                if not game:
+                    return
+
+                if game.question_finished:
+                    return
+
+                current_question_id = game.current_question_id
+
+                if not current_question_id:
+                    return
+
+                remaining_seconds = self.get_remaining_time(
+                    room_id=room_id,
+                    seconds=seconds
+                )
+
+                await self.connection_manager.broadcast(
+                    room_id=room_id,
+                    message={
+                        "type": "timer_update",
+                        "room_id": str(room_id),
+                        "question_id": str(current_question_id),
+                        "remaining_seconds": remaining_seconds
+                    }
+                )
+
+                if remaining_seconds <= 0:
+                    break
+
+                await asyncio.sleep(1)
 
             print(
                 f"GAME TIMER EXPIRED: room={room_id}"
