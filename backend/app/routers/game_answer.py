@@ -235,6 +235,12 @@ async def submit_answer(
             detail="Состояние игры не найдено"
         )
 
+    if game.question_finished:
+        raise HTTPException(
+            status_code=400,
+            detail="Вопрос уже завершён"
+        )
+
     current_question_id = game.current_question_id
 
     if current_question_id != data.question_id:
@@ -457,124 +463,22 @@ def get_game_statistics(
 )
 def get_room_leaderboard(
     room_id: UUID,
-    db: Session = Depends(get_db)
-):
-    return build_game_result(room_id, db)
-
-
-@router.post(
-    "/rooms/{room_id}/finish",
-    response_model=GameResultResponse
-)
-def finish_game(
-    room_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    room_repository = GameRoomRepository(db)
     participant_repository = GameParticipantRepository(db)
-    question_repository = QuestionRepository(db)
-    answer_repository = GameAnswerRepository(db)
 
-    room = room_repository.get_by_id(room_id)
-
-    if not room:
-        raise HTTPException(
-            status_code=404,
-            detail="Игровая комната не найдена"
-        )
-
-    if room.status != GameRoomStatus.PLAYING:
-        raise HTTPException(
-            status_code=400,
-            detail="Игра не находится в активном состоянии"
-        )
-
-    current_participant = (
-        participant_repository.get_by_user_and_room(
-            user_id=user_id,
-            room_id=room_id
-        )
+    participant = participant_repository.get_by_user_and_room(
+        user_id=user_id,
+        room_id=room_id
     )
 
-    if not current_participant:
+    if not participant:
         raise HTTPException(
             status_code=403,
             detail="Вы не являетесь участником этой комнаты"
         )
 
-    questions = question_repository.get_all()
+    return build_game_result(room_id, db)
 
-    if not questions:
-        raise HTTPException(
-            status_code=404,
-            detail="Вопросы для игры не найдены"
-        )
 
-    answers = answer_repository.get_by_participant(
-        current_participant.id
-    )
-
-    if len(answers) < len(questions):
-        raise HTTPException(
-            status_code=400,
-            detail="Вы ещё не ответили на все вопросы"
-        )
-
-    room.status = GameRoomStatus.FINISHED
-    room_repository.update(room)
-
-    participants = participant_repository.get_by_room(
-        room_id
-    )
-
-    result_participants = []
-
-    for participant in participants:
-        participant_answers = (
-            answer_repository.get_by_participant(
-                participant.id
-            )
-        )
-
-        answered_count = len(participant_answers)
-
-        correct_count = sum(
-            1
-            for answer in participant_answers
-            if answer.is_correct
-        )
-
-        result_participants.append(
-            {
-                "participant_id": participant.id,
-                "user_id": participant.user_id,
-                "score": participant.score,
-                "answered_count": answered_count,
-                "correct_count": correct_count,
-                "place": 0
-            }
-        )
-
-    result_participants.sort(
-        key=lambda participant: participant["score"],
-        reverse=True
-    )
-
-    for index, participant in enumerate(
-        result_participants,
-        start=1
-    ):
-        participant["place"] = index
-
-    winner_id = None
-
-    if result_participants:
-        winner_id = result_participants[0]["participant_id"]
-
-    return GameResultResponse(
-        room_id=room.id,
-        status=room.status.value,
-        winner_id=winner_id,
-        participants=result_participants
-    )

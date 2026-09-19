@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import mascotImage from "../assets/brainplizz-mascot.png";
 
 function Home() {
   return (
@@ -70,7 +71,10 @@ function Home() {
         <div className="home-glow home-glow-orange"></div>
 
         <div className="home-brain-card">
-          <div className="home-brain-icon">🧠</div>
+          <img
+            className="home-mascot"
+            src={mascotImage}
+            alt="Mascot BrainPlizz"/>
 
           <div className="home-lightning">⚡</div>
 

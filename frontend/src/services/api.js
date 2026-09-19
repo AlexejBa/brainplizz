@@ -11,7 +11,7 @@ export async function login(email, password) {
       password,
     }),
   });
-  console.log("LOGIN RESPONSE:", response.status);
+  
   const data = await response.json();
 
   if (!response.ok) {
@@ -52,7 +52,7 @@ export async function getMe() {
       Authorization: `Bearer ${token}`,
     },
   });
-  console.log("AUTH ME RESPONSE:", response.status);
+  
   const data = await response.json();
 
   if (!response.ok) {

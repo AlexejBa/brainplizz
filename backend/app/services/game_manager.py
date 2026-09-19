@@ -24,6 +24,7 @@ class RoomGameState:
     question_task: asyncio.Task | None = None
 
     question_finished: bool = False
+    finished_remaining_seconds: int | None = None
 
     @property
     def current_question_id(self) -> UUID | None:
@@ -192,20 +193,14 @@ class GameManager:
         game = self.get_game(room_id)
 
         if not game:
-            print(
-                f"GAME TIMER ERROR: game not found, room={room_id}"
-            )
             return
-
-        print(
-            f"GAME TIMER START: room={room_id}, seconds={seconds}"
-        )
 
         if game.question_task:
             game.question_task.cancel()
 
         game.question_started_at = datetime.utcnow()
         game.question_finished = False
+        game.finished_remaining_seconds = None
 
         game.question_task = asyncio.create_task(
             self._question_timer(
@@ -221,15 +216,17 @@ class GameManager:
     ) -> None:
 
         try:
-            print(
-                f"GAME TIMER WAITING: room={room_id}, seconds={seconds}"
-            )
 
             while True:
                 game = self.get_game(room_id)
 
                 if not game:
                     return
+
+                game.finished_remaining_seconds = self.get_remaining_time(
+                    room_id=room_id,
+                    seconds=seconds
+                )
 
                 if game.question_finished:
                     return
@@ -259,14 +256,7 @@ class GameManager:
 
                 await asyncio.sleep(1)
 
-            print(
-                f"GAME TIMER EXPIRED: room={room_id}"
-            )
-
         except asyncio.CancelledError:
-            print(
-                f"GAME TIMER CANCELLED: room={room_id}"
-            )
             return
 
         game = self.get_game(room_id)

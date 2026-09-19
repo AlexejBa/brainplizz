@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from app.database import SessionLocal
@@ -9,7 +10,7 @@ from app.repositories.game_participant_repository import (
 from app.services.game_manager import GameManager
 from app.websocket_manager import ConnectionManager
 
-
+logger = logging.getLogger(__name__)
 connection_manager = ConnectionManager()
 
 
@@ -18,10 +19,6 @@ async def on_question_finished(
     question_id: UUID
 ) -> None:
     db = SessionLocal()
-    print(
-        f"QUESTION FINISHED CALLBACK: "
-        f"room={room_id}, question={question_id}"
-    )
 
     try:
         question_repository = QuestionRepository(db)
@@ -33,9 +30,9 @@ async def on_question_finished(
         )
 
         if not question:
-            print(
-                f"QUESTION RESULT ERROR: "
-                f"question not found, question={question_id}"
+            logger.error(
+                "Вопрос не найден: question_id=%s",
+                question_id
             )
             return
 
@@ -57,12 +54,6 @@ async def on_question_finished(
                 if answer
                 else None
             )
-            print(
-                f"QUESTION RESULT SEND: "
-                f"room={room_id}, "
-                f"user={participant.user_id}, "
-                f"selected_answer={selected_answer}"
-            )
 
             await connection_manager.send_to_user(
                 room_id=room_id,
@@ -76,12 +67,12 @@ async def on_question_finished(
                 }
             )
 
-    except Exception as error:
-        print(
-            f"QUESTION RESULT ERROR: "
-            f"room={room_id}, "
-            f"question={question_id}, "
-            f"error={error}"
+    except Exception:
+        logger.exception(
+            "Ошибка отправки результата вопроса: "
+            "room_id=%s, question_id=%s",
+            room_id,
+            question_id
         )
 
     finally:

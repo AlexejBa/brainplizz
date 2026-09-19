@@ -18,8 +18,6 @@ function JoinRoom() {
     try {
       const participant = await joinRoom(code.trim());
 
-      console.log("Участник добавлен:", participant);
-
       navigate(`/room/${participant.room_id}`);
     } catch (error) {
       setError(error.message);

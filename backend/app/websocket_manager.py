@@ -1,7 +1,9 @@
+import logging
 from uuid import UUID
 
 from fastapi import WebSocket
 
+logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
@@ -64,12 +66,12 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
 
-            except Exception as error:
-                print(
-                    "WEBSOCKET SEND ERROR:",
-                    f"room={room_id}",
-                    f"user={user_id}",
-                    f"error={error}"
+            except Exception:
+                logger.exception(
+                    "Ошибка отправки WebSocket-сообщения: "
+                    "room_id=%s, user_id=%s",
+                    room_id,
+                    user_id
                 )
 
                 self.disconnect(

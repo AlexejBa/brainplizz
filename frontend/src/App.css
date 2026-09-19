@@ -646,9 +646,11 @@ body {
   z-index: 2;
 
   width: 330px;
-  min-height: 360px;
+  height: 360px;
 
-  padding: 40px 30px;
+  padding: 28px 30px;
+
+  box-sizing: border-box;
 
   display: flex;
   flex-direction: column;
@@ -682,13 +684,32 @@ body {
     );
 }
 
+.home-mascot {
+  width: 180px;
+  height: 180px;
+
+  object-fit: contain;
+
+  display: block;
+
+  margin: 0;
+  flex-shrink: 0;
+
+  filter:
+    drop-shadow(
+      0 0 20px rgba(236, 72, 153, 0.35)
+    );
+}
 
 .home-lightning {
   position: absolute;
 
-  top: 105px;
+  top: 55px;
+  right: 45px;
 
-  font-size: 58px;
+  font-size: 34px;
+
+  transform: rotate(-8deg);
 
   filter:
     drop-shadow(
@@ -698,7 +719,7 @@ body {
 
 
 .home-card-title {
-  margin-top: 20px;
+  margin-top: 8px;
 
   color: #f8fafc;
 
@@ -846,7 +867,7 @@ body {
 
 
 .home-floating-card-bottom {
-  bottom: 55px;
+  bottom: 20px;
   left: -10px;
 
   transform: rotate(-4deg);

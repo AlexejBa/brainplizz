@@ -24,7 +24,7 @@ function Game() {
         const data = await getMe();
 
         setUser(data);
-      } catch (error) {
+      } catch {
         localStorage.removeItem("access_token");
         localStorage.removeItem("user_id");
         navigate("/login");
@@ -42,8 +42,6 @@ function Game() {
 
     try {
       const room = await createRoom(4);
-
-      console.log("Создана комната:", room);
 
       navigate(`/room/${room.id}`);
 

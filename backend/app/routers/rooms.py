@@ -135,7 +135,14 @@ def join_room(
         participant
     )
 
-    return created_participant
+    return {
+        "id": created_participant.id,
+        "user_id": created_participant.user_id,
+        "username": created_participant.user.username,
+        "room_id": created_participant.room_id,
+        "score": created_participant.score,
+        "is_ready": created_participant.is_ready
+    }
 
 
 @router.get(
@@ -175,14 +182,24 @@ def get_room_participants(
         room_id
     )
 
-    return participants
+    return [
+        {
+            "id": participant.id,
+            "user_id": participant.user_id,
+            "username": participant.user.username,
+            "room_id": participant.room_id,
+            "score": participant.score,
+            "is_ready": participant.is_ready
+        }
+        for participant in participants
+    ]
 
 
 @router.post(
     "/{room_id}/ready",
     response_model=GameParticipantResponse
 )
-def set_ready(
+async def set_ready(
     room_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
@@ -217,13 +234,27 @@ def set_ready(
             detail="Вы не являетесь участником этой комнаты"
         )
 
-    participant.is_ready = True
+    participant.is_ready = not participant.is_ready
 
     updated_participant = participant_repository.update(
         participant
     )
-
-    return updated_participant
+    await connection_manager.broadcast(
+        room_id=room_id,
+        message={
+            "type": "ready_updated",
+            "user_id": str(updated_participant.user_id),
+            "is_ready": updated_participant.is_ready
+        }
+    )
+    return {
+        "id": updated_participant.id,
+        "user_id": updated_participant.user_id,
+        "username": updated_participant.user.username,
+        "room_id": updated_participant.room_id,
+        "score": updated_participant.score,
+        "is_ready": updated_participant.is_ready
+    }
 
 @router.post("/{room_id}/start")
 async def start_game(
@@ -279,27 +310,7 @@ async def start_game(
 
     room.status = GameRoomStatus.PLAYING
 
-    print(
-        f"START GAME DEBUG BEFORE UPDATE: "
-        f"room_id={room.id}, "
-        f"status={room.status}"
-    )
-
     room_repository.update(room)
-
-    print(
-        f"START GAME DEBUG AFTER UPDATE: "
-        f"room_id={room.id}, "
-        f"status={room.status}"
-    )
-
-    check_room = room_repository.get_by_id(room_id)
-
-    print(
-        f"START GAME DEBUG RELOAD: "
-        f"room_id={room_id}, "
-        f"status={check_room.status if check_room else None}"
-    )
 
     question_ids = [
         question.id

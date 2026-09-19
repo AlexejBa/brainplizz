@@ -91,10 +91,25 @@ async def websocket_room(
             )
 
             if current_question_id:
-                remaining_seconds = game_manager.get_remaining_time(
-                    room_id=room_id,
-                    seconds=30
+                game = game_manager.get_game(room_id)
+
+                question_finished = (
+                    game.question_finished
+                    if game
+                    else False
                 )
+
+                if question_finished:
+                    remaining_seconds = (
+                        game.finished_remaining_seconds
+                        if game and game.finished_remaining_seconds is not None
+                        else 0
+                    )
+                else:
+                    remaining_seconds = game_manager.get_remaining_time(
+                        room_id=room_id,
+                        seconds=30
+                    )
 
                 existing_answer = (
                     answer_repository.get_by_participant_and_question(
@@ -119,14 +134,6 @@ async def websocket_room(
                     else None
                 )
 
-                game = game_manager.get_game(room_id)
-
-                question_finished = (
-                    game.question_finished
-                    if game
-                    else False
-                )
-
                 await connection_manager.send_to_user(
                     room_id=room_id,
                     user_id=user_id,
@@ -134,6 +141,16 @@ async def websocket_room(
                         "type": "current_question",
                         "room_id": str(room_id),
                         "question_id": str(current_question_id),
+                        "question_number": (
+                            game.current_question_index + 1
+                            if game
+                            else None
+                        ),
+                        "total_questions": (
+                            len(game.question_ids)
+                            if game
+                            else None
+                        ),
                         "remaining_seconds": remaining_seconds,
                         "selected_answer": selected_answer,
                         "correct_answer": correct_answer,
@@ -165,29 +182,12 @@ async def websocket_room(
             message = await websocket.receive_json()
 
             message_type = message.get("type")
-            print(
-                f"WEBSOCKET MESSAGE: "
-                f"room={room_id}, "
-                f"user={user_id}, "
-                f"type={message_type}, "
-                f"message={message}"
-            )
 
             if message_type == "next_question":
 
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"получено сообщение от user={user_id}"
-                )
-
                 db.expire_all()
                 current_room = room_repository.get_by_id(
-                    room_id
-                )
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"room_found={current_room is not None}"
-                )
+                    room_id)
 
                 if not current_room:
                     await connection_manager.send_to_user(
@@ -199,12 +199,6 @@ async def websocket_room(
                         }
                     )
                     continue
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"host_id={current_room.host_id}, "
-                    f"user_id={user_id}"
-                )
 
                 if current_room.host_id != user_id:
                     await connection_manager.send_to_user(
@@ -219,11 +213,6 @@ async def websocket_room(
                         }
                     )
                     continue
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"room_status={current_room.status}"
-                )
 
                 if current_room.status != GameRoomStatus.PLAYING:
                     await connection_manager.send_to_user(
@@ -242,10 +231,6 @@ async def websocket_room(
                 game = game_manager.get_game(
                     room_id
                 )
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"game_found={game is not None}"
-                )
 
                 if not game:
                     await connection_manager.send_to_user(
@@ -257,19 +242,6 @@ async def websocket_room(
                         }
                     )
                     continue
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"question_finished={game.question_finished}"
-                )
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"current_question_index="
-                    f"{game.current_question_index}, "
-                    f"total_questions="
-                    f"{len(game.question_ids)}"
-                )
 
                 if not game.question_finished:
                     await connection_manager.send_to_user(
@@ -287,11 +259,6 @@ async def websocket_room(
 
                 is_last = game_manager.is_last_question(
                     room_id
-                )
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"is_last_question={is_last}"
                 )
 
                 if is_last:
@@ -315,19 +282,8 @@ async def websocket_room(
 
                     continue
 
-                print(
-                    "NEXT QUESTION DEBUG: "
-                    "переходим к следующему вопросу"
-                )
-
-
                 next_question_id = game_manager.next_question(
                     room_id
-                )
-
-                print(
-                    f"NEXT QUESTION DEBUG: "
-                    f"next_question_id={next_question_id}"
                 )
 
                 if not next_question_id:
