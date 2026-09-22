@@ -110,7 +110,14 @@ def join_room(
     )
 
     if existing_participant:
-        return existing_participant
+        return {
+            "id": existing_participant.id,
+            "user_id": existing_participant.user_id,
+            "username": existing_participant.user.username,
+            "room_id": existing_participant.room_id,
+            "score": existing_participant.score,
+            "is_ready": existing_participant.is_ready
+        }
 
     if room.status != GameRoomStatus.WAITING:
         raise HTTPException(
