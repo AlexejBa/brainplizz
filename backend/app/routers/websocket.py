@@ -128,12 +128,6 @@ async def websocket_room(
                     current_question_id
                 )
 
-                correct_answer = (
-                    current_question.correct_answer
-                    if current_question
-                    else None
-                )
-
                 await connection_manager.send_to_user(
                     room_id=room_id,
                     user_id=user_id,
@@ -153,7 +147,6 @@ async def websocket_room(
                         ),
                         "remaining_seconds": remaining_seconds,
                         "selected_answer": selected_answer,
-                        "correct_answer": correct_answer,
                         "question_finished": question_finished
                     }
                 )
@@ -207,7 +200,7 @@ async def websocket_room(
                         message={
                             "type": "error",
                             "message": (
-                                "Только хост может перейти "
+                                "Только ведущий может перейти "
                                 "к следующему вопросу"
                             )
                         }
@@ -342,7 +335,8 @@ async def websocket_room(
         if user_id is not None:
             connection_manager.disconnect(
                 room_id=room_id,
-                user_id=user_id
+                user_id=user_id,
+                websocket=websocket,
             )
 
             await connection_manager.broadcast(

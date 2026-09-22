@@ -49,6 +49,7 @@ def create_question(
     response_model=list[QuestionResponse]
 )
 def get_questions(
+    user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     repository = QuestionRepository(db)
@@ -62,6 +63,7 @@ def get_questions(
 )
 def get_question(
     question_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     repository = QuestionRepository(db)
@@ -75,7 +77,6 @@ def get_question(
         )
 
     return question
-
 
 @router.delete(
     "/{question_id}",

@@ -25,9 +25,15 @@ class ConnectionManager:
     def disconnect(
         self,
         room_id: UUID,
-        user_id: UUID
+        user_id: UUID,
+        websocket: WebSocket | None = None,
     ):
         if room_id not in self.rooms:
+            return
+
+        current_websocket = self.rooms[room_id].get(user_id)
+
+        if websocket is not None and current_websocket is not websocket:
             return
 
         self.rooms[room_id].pop(user_id, None)
@@ -76,5 +82,6 @@ class ConnectionManager:
 
                 self.disconnect(
                     room_id=room_id,
-                    user_id=user_id
+                    user_id=user_id,
+                    websocket=websocket,
                 )

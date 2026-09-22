@@ -34,7 +34,14 @@ def get_current_user_id(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return UUID(user_id)
+    try:
+        return UUID(user_id)
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=401,
+            detail="Недействительный токен",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()

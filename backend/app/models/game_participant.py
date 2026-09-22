@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.base import Base
@@ -9,6 +9,14 @@ from app.base import Base
 
 class GameParticipant(Base):
     __tablename__ = "game_participants"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "room_id",
+            name="uq_game_participant_user_room",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         primary_key=True,
