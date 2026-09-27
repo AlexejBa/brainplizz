@@ -26,7 +26,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       APP_ENV: production
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_SECRET_KEY: 1PgiZQIg76nxlm7l2tHqUGY_ccXS4s1SlKWtttsFgOY
     ports:
       - "8000:8000"
     depends_on:
