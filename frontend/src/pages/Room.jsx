@@ -333,9 +333,12 @@ function Room() {
 
     let isUnmounted = false;
 
-    const socket = new WebSocket(
-      `ws://127.0.0.1:8000/ws/rooms/${roomId}?user_id=${currentUserId}`
-    );
+  const protocol =
+  window.location.protocol === "https:" ? "wss:" : "ws:";
+
+  const socket = new WebSocket(
+    `${protocol}//${window.location.host}/ws/rooms/${roomId}?user_id=${currentUserId}`
+  );
 
     socketRef.current = socket;
 
